@@ -2,13 +2,24 @@
  * ASTRAEUS - Dev B Module Exports
  *
  * Stellar Treasury, Settlement, and FX Layer
+ *
+ * This module provides everything Dev B needs for:
+ * - Vault management (create, configure multisig)
+ * - Treasury snapshots (for PoM validation)
+ * - Settlement planning (build Stellar transactions)
+ * - Settlement execution (sign, submit, track)
+ * - Replay protection (memo-based deduplication)
  */
 
+// =============================================================================
 // Types and Interfaces
+// =============================================================================
 export * from './interfaces/types';
 export * from './interfaces/crypto';
 
+// =============================================================================
 // Vault Management
+// =============================================================================
 export {
   VaultManager,
   VaultCreationResult,
@@ -16,10 +27,63 @@ export {
   generateTestAuditors,
 } from './vault/vault_manager';
 
+// =============================================================================
 // Treasury Snapshot
+// =============================================================================
 export {
   TreasurySnapshotService,
   createTestnetSnapshotService,
   stroopsToDecimal,
   decimalToStroops,
 } from './snapshot/treasury_snapshot';
+
+// =============================================================================
+// PoM Delta Computation
+// =============================================================================
+export {
+  computeNetOutflow,
+  pomDeltaToJSON,
+  pomDeltaFromJSON,
+  verifyDeltaMatch,
+  groupWithdrawalsByAsset,
+  sortWithdrawalsDeterministically,
+} from './settlement/pom_delta';
+
+// =============================================================================
+// Settlement Planning
+// =============================================================================
+export {
+  SettlementPlanner,
+  SettlementTransaction,
+  DetailedSettlementPlan,
+  createTestnetSettlementPlanner,
+} from './settlement/settlement_planner';
+
+// =============================================================================
+// Multisig Orchestration
+// =============================================================================
+export {
+  MultisigOrchestrator,
+  SubmissionResult,
+  SettlementExecutionResult,
+  createTestnetOrchestrator,
+} from './settlement/multisig_orchestrator';
+
+// =============================================================================
+// Replay Protection
+// =============================================================================
+export {
+  ReplayProtectionService,
+  SettlementRecord,
+  createTestnetReplayProtection,
+} from './safety/replay_protection';
+
+// =============================================================================
+// Settlement Execution (Main Entry Point)
+// =============================================================================
+export {
+  SettlementExecutor,
+  SettlementExecutorConfig,
+  CommitmentEventListener,
+  createTestnetSettlementExecutor,
+} from './settlement/settlement_executor';

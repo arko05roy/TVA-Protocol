@@ -146,14 +146,19 @@ Sample Memo:
 ```
 See `contracts/WITHDRAWAL_QUEUE_FORMAT.md` for complete specification.
 
-### DEV B STATUS: ✅ **PHASE 1 COMPLETED**
+### DEV B STATUS: ✅ **PHASE 1-4 COMPLETED**
 
 **Dev B has delivered:**
 - ✅ Complete TypeScript project structure (`dev-b/`)
 - ✅ `VaultManager` class with full functionality
 - ✅ `TreasurySnapshotService` for PoM validation
 - ✅ SHA-256 crypto utilities matching interfaces.md
-- ✅ 44 passing tests
+- ✅ PoM Delta computation (`computeNetOutflow`, `verifyDeltaMatch`)
+- ✅ `SettlementPlanner` class (transaction building, batching, path payments)
+- ✅ `MultisigOrchestrator` class (signature collection, PoM verification, submission)
+- ✅ `ReplayProtectionService` (memo-based deduplication, settlement tracking)
+- ✅ `SettlementExecutor` class (end-to-end settlement orchestration)
+- ✅ 63 passing tests
 - ✅ Golden test vectors for cross-verification with Dev A
 
 **Files created:**
@@ -161,8 +166,14 @@ See `contracts/WITHDRAWAL_QUEUE_FORMAT.md` for complete specification.
 - `dev-b/src/interfaces/crypto.ts` - SHA-256 hashing (computeAssetId, computeMemo, computeBalanceLeaf, etc.)
 - `dev-b/src/vault/vault_manager.ts` - Vault creation and management
 - `dev-b/src/snapshot/treasury_snapshot.ts` - Treasury snapshot service
+- `dev-b/src/settlement/pom_delta.ts` - PoM delta computation and verification
+- `dev-b/src/settlement/settlement_planner.ts` - Settlement plan building
+- `dev-b/src/settlement/multisig_orchestrator.ts` - Signature collection and submission
+- `dev-b/src/settlement/settlement_executor.ts` - End-to-end settlement orchestration
+- `dev-b/src/safety/replay_protection.ts` - Memo-based replay protection
 - `dev-b/tests/crypto.test.ts` - 29 crypto tests
 - `dev-b/tests/snapshot.test.ts` - 15 snapshot tests
+- `dev-b/tests/settlement.test.ts` - 19 settlement tests
 
 #### 1.1 Stellar Testnet Environment Setup ✅
 - [x] **Stellar SDK installed** via npm (`@stellar/stellar-sdk@12.3.0`)
@@ -220,11 +231,13 @@ See `contracts/WITHDRAWAL_QUEUE_FORMAT.md` for complete specification.
 
 **Note:** Execution core is complete, state root computation is next phase.
 
-### YOUR TASKS (Dev B):
+### DEV B STATUS: ✅ **COMPLETED** (as part of Phase 1)
+
+Treasury Snapshot Service was implemented in Phase 1. All tasks complete.
 
 #### 2.1 Treasury Snapshot Service (`treasury_snapshot.ts`)
 
-- [ ] **Define TreasurySnapshot type**
+- [x] **Define TreasurySnapshot type**
   ```typescript
   interface Asset {
     code: string;        // 1-12 alphanumeric
@@ -238,7 +251,7 @@ See `contracts/WITHDRAWAL_QUEUE_FORMAT.md` for complete specification.
   }
   ```
 
-- [ ] **Implement `computeAssetId()` helper**
+- [x] **Implement `computeAssetId()` helper**
   ```typescript
   function computeAssetId(assetCode: string, issuer: string): string {
     // issuer = "NATIVE" for XLM, or 32-byte Ed25519 pubkey for issued assets
@@ -248,7 +261,7 @@ See `contracts/WITHDRAWAL_QUEUE_FORMAT.md` for complete specification.
 
   **Critical:** Must use SHA-256 (not keccak256) to match Dev A's computation
 
-- [ ] **Implement `getTreasurySnapshot()`**
+- [x] **Implement `getTreasurySnapshot()`**
   ```typescript
   async function getTreasurySnapshot(
     vaultAddress: string
@@ -267,7 +280,7 @@ See `contracts/WITHDRAWAL_QUEUE_FORMAT.md` for complete specification.
   5. Extract thresholds (use `med_threshold`)
   6. Return snapshot
 
-- [ ] **Implement asset normalization**
+- [x] **Implement asset normalization**
   ```typescript
   function normalizeAsset(horizonBalance: any): { code: string; issuer: string } {
     if (horizonBalance.asset_type === "native") {
@@ -280,10 +293,10 @@ See `contracts/WITHDRAWAL_QUEUE_FORMAT.md` for complete specification.
   }
   ```
 
-- [ ] **Add error handling:**
-  - [ ] Horizon timeout -> retry with backoff
-  - [ ] Account not found -> throw clear error
-  - [ ] Malformed asset -> log and skip
+- [x] **Add error handling:**
+  - [x] Horizon timeout -> retry with backoff
+  - [x] Account not found -> throw clear error
+  - [x] Malformed asset -> log and skip
 
 #### 2.2 Integration Point
 - [ ] **Expose snapshot as API endpoint or module export**
