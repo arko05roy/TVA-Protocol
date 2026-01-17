@@ -1,272 +1,467 @@
-📅 DAY 0 (PRE‑WORK — 2 HOURS MAX)
-BOTH (Together, live)
-Output: interfaces.md (IMMUTABLE)
+ASTRAEUS
+A Proof‑of‑Money Settlement Layer for Parallel Financial Execution on Stellar
+Abstract
+Stellar is optimized for final settlement, not for high‑frequency or private financial execution. Modern financial systems—payroll engines, DAOs, exchanges, internal treasuries—require fast, private, stateful computation while retaining the guarantees of on‑chain money.
 
-Lock these EXACTLY:
+Astraeus introduces a parallel execution architecture anchored to Stellar, where computation occurs in isolated on‑chain subnets while money safety is enforced purely by liquidity constraints, not execution correctness.
 
-State root byte layout
-Hash algo (SHA256)
-Leaf prefixes (BAL, WD)
-Asset canonical encoding
-PoM delta schema
+The protocol replaces traditional fraud proofs or validity proofs with a stronger invariant: no execution may settle unless it is provably payable by real on‑chain funds. This invariant is formalized as Proof of Money (PoM).
 
-Memo format (SHA256(subnet_id||block)[0..28])
+1. Motivation
+1.1 The Limits of Smart Contract L1s
+Layer‑1 blockchains attempt to simultaneously provide:
 
-TreasurySnapshot JSON schema
+Execution
 
-🚨 After this → NO CHANGES ALLOWED
+Ordering
 
-📅 DAY 1 — EXECUTION CORE (NO STELLAR)
-🧠 DEV A (Execution + Soroban)
-Goal: Deterministic execution works standalone
+Settlement
 
-Tasks
-Implement SubnetFactory
+Storage
 
-create_subnet
+Privacy
 
-register_treasury
+This leads to unavoidable tradeoffs:
 
-Implement ExecutionContract
+Low throughput
 
-credit
+High fees
 
-debit
+Public state
 
-transfer
+Global contention
 
-request_withdrawal
+Stellar intentionally avoids this trap by focusing on settlement correctness.
 
-Implement storage
+However, this leaves a gap:
+Where should complex financial logic live if not on L1?
 
-balances
+1.2 Why Rollups Are Insufficient
+Rollups aim to prove execution correctness.
 
-withdrawal queue
+This requires:
 
-nonce
+Complex proof systems
 
-Deliverable (EOD)
-Soroban contracts compile
+Heavy cryptography
 
-Unit tests:
+Tight coupling between execution semantics and settlement
 
-balance changes
+For financial systems, this is unnecessary.
 
-withdrawal deducts balance
+Banks, clearing houses, and payment networks do not prove execution correctness.
+They prove liquidity sufficiency.
 
-NO PoM yet
+2. Core Insight
+Money safety does not require execution correctness.
+It requires settlement enforceability.
 
-⚔️ DEV B (Infra prep)
-Goal: Stellar environment ready
+If an execution system can only extract money that already exists on L1, then:
 
-Tasks
-Stellar testnet setup
+Incorrect execution cannot cause insolvency
 
-Vault creation script
+Malicious execution cannot mint funds
 
-Multisig config tested manually
+Bugs reduce liveness, not safety
 
-Trustlines added
+Astraeus formalizes this principle.
 
-Deliverable (EOD)
-Working multisig vault on testnet
+3. System Overview
+Astraeus consists of:
 
-Vault address handed to Dev A
+Parallel Execution Subnets
 
-📅 DAY 2 — STATE ROOTS + AUDITABILITY
-🧠 DEV A
-Goal: State → cryptographic truth
+Run financial logic (payroll, transfers, batching)
 
-Tasks
-Implement compute_state_root
+Maintain private internal state
 
-balance leaves
+Produce deterministic commitments
 
-withdrawal leaves
+Settlement Layer (Stellar)
 
-sorting
+Holds real assets
 
-merkle root
+Enforces multisig authorization
 
-Golden test vectors
+Provides finality via SCP
 
-same state → same root
+Proof of Money (PoM)
 
-reordered input → same root
+A liquidity‑based settlement constraint
 
-Deliverable (EOD)
-Deterministic root verified across runs
+Independent of execution correctness
 
-Root spec locked forever
+4. Formal Model
+4.1 Assets and Reality
+Let Stellar define the ground truth:
 
-⚔️ DEV B
-Goal: Read‑only money view
-
-Tasks
-Implement getTreasurySnapshot
-
-Normalize assets
-
-Return balances + signers + threshold
-
-Deliverable (EOD)
-Snapshot JSON matches interface
-
-Used by Dev A locally
-
-📅 DAY 3 — PROOF OF MONEY (CORE DAY)
-🧠 DEV A (MOST IMPORTANT DAY)
-Goal: PoM is airtight
-
-Tasks
-Implement:
-
-compute_net_outflow
-
-check_solvency
-
-check_constructibility
-
-check_authorization
-
-Implement pom_validate
-
-Failure enums + revert reasons
-
-Unit tests:
-
-insolvent state
-
-fake withdrawals
-
-signer mismatch
-
-Deliverable (EOD)
-PoM rejects bad states
-
-PoM accepts valid ones
-
-PoM is FINAL
-
-⚔️ DEV B
-Goal: Settlement logic skeleton
-
-Tasks
-Implement buildSettlementPlan
-
-Implement buildPaymentTx
-
-Memo injection logic
-
-Deterministic ordering
-
-Deliverable (EOD)
-XDR txs built (not submitted)
-
-Matches PoM delta exactly
-
-📅 DAY 4 — COMMITMENT + SETTLEMENT LINK
-🧠 DEV A
-Goal: On‑chain validity gate
-
-Tasks
-Implement commit_state
-
-Signature verification
-
-PoM enforced inside commit
-
-Block monotonicity
-
-Deliverable (EOD)
-State commits accepted/rejected correctly
-
-⚔️ DEV B
-Goal: Real money movement
-
-Tasks
-Implement multisig signing
-
-Implement submit + await finality
-
-Replay protection (memo scan)
-
-Deliverable (EOD)
-Funds move on Stellar testnet
-
-Idempotent submission
-
-📅 DAY 5 — FX + EDGE CASES
-🧠 DEV A
-Goal: Execution safety
-
-Tasks
-Withdrawal queue edge cases
-
-Duplicate prevention
-
-Max queue bounds
-
-Negative balance impossible proofs
-
-⚔️ DEV B
-Goal: FX correctness
-
-Tasks
-Path discovery (strict-receive)
-
-Slippage bounds
-
-FX settlement txs
-
-Deliverable (EOD)
-FX withdrawal works on testnet
-
-📅 DAY 6 — END‑TO‑END RUNS
-BOTH (Together)
-Goal: System actually works
-
-Full flow (repeat until boring)
-Create subnet
-
-Credit balances
-
-Request withdrawals
-
-Compute state root
-
-Commit root
-
-Build settlement
-
-Sign + submit
-
-Verify L1 balances
-
-Deliverable (EOD)
-3 clean successful runs
-
-1 forced failure run (PoM halt)
-
-📅 DAY 7 — FREEZE & DEMO
-BOTH
-Goal: No more code changes
-
-Tasks
-Remove debug logs
-
-Add invariant comments
-
-Write:
-
-README.md
-
-FLOW.md
-
-Record demo steps
-
-Tag release
-
-Final Deliverable
-Working Astraeus on Stellar testnet
-
+T
+=
+{
+(
+a
+1
+,
+b
+1
+)
+,
+(
+a
+2
+,
+b
+2
+)
+,
+…
+ 
+}
+T={(a 
+1
+​
+ ,b 
+1
+​
+ ),(a 
+2
+​
+ ,b 
+2
+​
+ ),…}
+Where:
+
+a
+i
+a 
+i
+​
+  is an asset (XLM, issued assets)
+
+b
+i
+∈
+Z
+≥
+0
+b 
+i
+​
+ ∈Z 
+≥0
+​
+  is its balance in stroops
+
+This state is objectively real.
+
+4.2 Execution Claims
+Execution subnets produce:
+
+Internal balances (opaque to Stellar)
+
+A withdrawal queue
+
+Withdrawals are:
+
+W
+=
+{
+w
+1
+,
+w
+2
+,
+…
+,
+w
+n
+}
+W={w 
+1
+​
+ ,w 
+2
+​
+ ,…,w 
+n
+​
+ }
+Each withdrawal:
+
+w
+j
+=
+(
+a
+j
+,
+x
+j
+,
+d
+j
+)
+w 
+j
+​
+ =(a 
+j
+​
+ ,x 
+j
+​
+ ,d 
+j
+​
+ )
+Where:
+
+a
+j
+a 
+j
+​
+  is the asset
+
+x
+j
+>
+0
+x 
+j
+​
+ >0 is the amount
+
+d
+j
+d 
+j
+​
+  is the destination address
+
+These are claims, not money.
+
+5. Proof of Money (PoM)
+5.1 Definition
+For each asset 
+a
+a, define net outflow:
+
+Δ
+(
+a
+)
+=
+∑
+w
+j
+∈
+W
+,
+ 
+w
+j
+.
+a
+=
+a
+x
+j
+Δ(a)= 
+w 
+j
+​
+ ∈W,w 
+j
+​
+ .a=a
+∑
+​
+ x 
+j
+​
+ 
+PoM requires:
+
+∀
+a
+:
+Δ
+(
+a
+)
+≤
+T
+(
+a
+)
+∀a:Δ(a)≤T(a)
+5.2 Interpretation
+PoM does not prove balances are correct
+
+PoM does not prove execution was fair
+
+PoM proves execution is payable
+
+This is sufficient for settlement safety.
+
+6. State Commitment
+6.1 State Roots
+Each execution epoch produces a state root:
+
+R
+=
+H
+(
+B
+,
+W
+,
+n
+)
+R=H(B,W,n)
+Where:
+
+B
+B = internal balances
+
+W
+W = withdrawal queue
+
+n
+n = monotonically increasing nonce
+
+The hash is SHA‑256, chosen for compatibility with Stellar tooling and deterministic cross‑language computation.
+
+6.2 Purpose of State Roots
+State roots:
+
+Bind withdrawals to a specific execution snapshot
+
+Prevent history rewriting
+
+Enable replay protection
+
+The settlement layer never interprets internal state—only commits to it.
+
+7. Settlement Mechanics
+7.1 Vault Model
+All funds are held in a Stellar vault account:
+
+Protected by multisig
+
+Controlled by independent signers
+
+Threshold > 50%
+
+No execution node can move funds alone.
+
+7.2 Transaction Construction
+For each asset:
+
+If native → Payment
+
+If issued → Payment
+
+If FX required → PathPaymentStrictReceive
+
+Each transaction:
+
+Encodes (subnet_id, block_number) into the memo
+
+Is deterministic given PoM delta
+
+Fails atomically if constraints are violated
+
+8. Determinism and Replay Protection
+Each settlement is bound to:
+
+memo
+=
+first
+28
+(
+H
+(
+subnet_id
+ 
+∥
+ 
+block_number
+)
+)
+memo=first 
+28
+​
+ (H(subnet_id∥block_number))
+This ensures:
+
+No double settlement
+
+No cross‑subnet confusion
+
+Full traceability
+
+9. Security Model
+9.1 Trust Assumptions
+Stellar consensus is honest‑majority
+
+Hash functions are collision‑resistant
+
+Multisig signers are independent
+
+No assumptions about:
+
+Execution honesty
+
+Sequencer correctness
+
+Auditor benevolence
+
+9.2 Attack Analysis
+Attack	Outcome
+Fake balances	Blocked by PoM
+Invent withdrawals	Blocked by PoM
+Replay attack	Blocked by memo
+Malicious sequencer	Funds safe
+Buggy execution	Liveness loss only
+There is no attack path to insolvency.
+
+10. Privacy Properties
+Internal balances never touch L1
+
+Withdrawals reveal only net flows
+
+No per‑user accounting on Stellar
+
+Privacy is achieved structurally, not cryptographically.
+
+11. Comparison to Rollups
+Property	Rollups	Astraeus
+Proves execution	Yes	No
+Proves solvency	Indirect	Direct
+Cryptographic complexity	High	Low
+Failure mode	Funds frozen	Funds safe
+Suitable for finance	Mixed	Native
+Astraeus optimizes for financial truth, not computational truth.
+
+12. Design Philosophy
+Astraeus follows one rule:
+
+Execution may be wrong.
+Money must never be.
+
+Everything else is subordinate.
+
+13. Conclusion
+Astraeus reframes blockchain scalability:
+
+Stellar becomes a settlement court
+
+Execution becomes parallel and private
+
+Security reduces to liquidity mathematics
+
+By replacing execution proofs with Proof of Money, Astraeus achieves a simpler, stronger, and more realistic model for financial systems.
