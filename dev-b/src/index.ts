@@ -87,3 +87,30 @@ export {
   CommitmentEventListener,
   createTestnetSettlementExecutor,
 } from './settlement/settlement_executor';
+
+// =============================================================================
+// FX Engine
+// =============================================================================
+export {
+  FxEngine,
+  PathResult,
+  FxSettlementResult,
+  SlippageConfig,
+  DEFAULT_SLIPPAGE_CONFIG,
+  createTestnetFxEngine,
+} from './fx/fx_engine';
+
+// =============================================================================
+// Failure Handling
+// =============================================================================
+export {
+  FailureHandler,
+  FailureSeverity,
+  RecoveryAction,
+  FailureContext,
+  FailureClassification,
+  RetryConfig,
+  DEFAULT_RETRY_CONFIG,
+  createFailureHandler,
+  assertOrHalt,
+} from './safety/failure_handler';
