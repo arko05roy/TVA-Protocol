@@ -1,4 +1,4 @@
-# Arko Integration Guide - Phase 3 & 4
+# Arko Integration Guide - Phases 3, 4 & 5
 
 ## Quick Reference
 
@@ -66,25 +66,53 @@ Net Outflow:
 - Auditors not in treasury signers
 - Insufficient matching auditors to meet threshold
 
+### Commitment Event (Phase 5)
+
+**Event:** `StateCommitted(bytes32 indexed subnet_id, uint64 indexed block_number, bytes32 state_root)`
+
+**What Arko needs to know:**
+- Event is emitted when `commit_state()` successfully executes
+- Event indicates state root is final and ready for settlement
+- Arko should listen to this event to trigger settlement
+
+**Event Handler:**
+```typescript
+// Dev B already has this ready in settlement_executor.ts
+async onCommitmentEvent(
+  event: CommitmentEvent,
+  fetchWithdrawals: (subnetId: string, blockNumber: bigint) => Promise<WithdrawalIntent[]>
+): Promise<SettlementResult>
+```
+
+**Integration Flow:**
+1. Listen for `StateCommitted` event
+2. Extract `subnet_id` and `block_number`
+3. Fetch withdrawal queue from Dev A's contract
+4. Execute settlement (see `settlement_executor.ts`)
+
 ## Integration Checklist
 
-- [ ] Implement state root computation using SHA-256
-- [ ] Verify computation logic matches (leaf formats, sorting, Merkle trees)
-- [ ] Implement net outflow computation
-- [ ] Verify net outflow matches Dev A's output
-- [ ] Implement PoM checks (solvency, constructibility, authorization)
-- [ ] Test with example cases from `POM_EXAMPLES.md`
-- [ ] Integrate with settlement planner
+- [x] Implement state root computation using SHA-256
+- [x] Verify computation logic matches (leaf formats, sorting, Merkle trees)
+- [x] Implement net outflow computation
+- [x] Verify net outflow matches Dev A's output
+- [x] Implement PoM checks (solvency, constructibility, authorization)
+- [x] Test with example cases from `POM_EXAMPLES.md`
+- [x] Integrate with settlement planner
+- [x] Implement commitment event listener
+- [ ] Connect event listener to Dev A's contract (Phase 6)
 
 ## Files to Review
 
-1. `contracts/ExecutionCore.sol` - See implementation
+1. `contracts/ExecutionCore.sol` - See implementation (all phases)
 2. `contracts/POM_EXAMPLES.md` - Detailed examples
 3. `contracts/GOLDEN_TEST_VECTORS.md` - Test vectors
-4. `agent/interfaces.md` - Interface specifications
+4. `contracts/PHASE5_SUMMARY.md` - Commitment contract details
+5. `agent/interfaces.md` - Interface specifications
+6. `dev-b/src/settlement/settlement_executor.ts` - Event handler ready
 
 ---
 
 **Status:** Ready for Integration
-**Last Updated:** 2024-11-14
+**Last Updated:** 2026-01-17
 
