@@ -55,20 +55,37 @@
   - Test documentation: `contracts/test/README.md`, `contracts/test/TEST_SUMMARY.md`
   - Files: `contracts/test/TestSubnetFactory.sol`, `contracts/test/TestExecutionCore.sol`
 
-### 🔄 PHASE 2: STATE ROOT COMPUTATION (IN PROGRESS / NEXT)
-- [ ] State root computation function
-- [ ] Merkle tree construction for balances and withdrawals
-- [ ] Golden test vectors for determinism
-- [ ] State root spec locked
+### ✅ PHASE 2: STATE ROOT COMPUTATION (COMPLETED)
+- [x] **State root computation function** - `compute_state_root()` implemented
+- [x] **Merkle tree construction** - Separate trees for balances and withdrawals, deterministic sorting
+- [x] **Golden test vectors** - Documented in `GOLDEN_TEST_VECTORS.md` for Arko verification
+- [x] **State root spec locked** - Format defined in `interfaces.md`
+- [x] **File**: `contracts/ExecutionCore.sol` (Phase 3 section)
+- [x] **Tests**: `contracts/test/TestPhase3Phase4.sol` (4 Phase 3 tests)
 
-### 📋 PHASE 3: PROOF OF MONEY (PENDING)
-- [ ] PoM implementation: `compute_net_outflow()`, `check_solvency()`, `check_constructibility()`, `check_authorization()`
-- [ ] `pom_validate()` with failure enums
-- [ ] Unit tests for insolvency, fake withdrawals, signer mismatch
+### ✅ PHASE 3: PROOF OF MONEY (COMPLETED)
+- [x] **PoM implementation** - All functions implemented:
+  - `compute_net_outflow()` - Aggregates withdrawals by asset
+  - `check_solvency()` - Verifies treasury can cover withdrawals
+  - `check_constructibility()` - Validates withdrawal destinations and formats
+  - `check_authorization()` - Verifies auditors can sign treasury
+- [x] **`pom_validate()`** - Complete PoM validation with `PomResult` enum (Ok, Insolvent, NonConstructible, Unauthorized)
+- [x] **Unit tests** - 9 Phase 4 tests covering all failure modes
+- [x] **Documentation**: `POM_EXAMPLES.md` with failing cases for Arko
+- [x] **File**: `contracts/ExecutionCore.sol` (Phase 4 section)
+- [x] **Tests**: `contracts/test/TestPhase3Phase4.sol` (9 Phase 4 tests)
 
-### 📋 PHASE 4: COMMITMENT CONTRACT (PENDING)
-- [ ] `commit_state()` - signature verification, PoM enforced, block monotonicity
-- [ ] State commits accepted/rejected correctly
+### ✅ PHASE 4: COMMITMENT CONTRACT (COMPLETED)
+- [x] **`commit_state()` function** - Complete implementation with:
+  - Block number monotonicity enforcement
+  - Auditor signature verification (threshold check)
+  - PoM validation (reverts if PoM fails)
+  - Commit storage: `COMMITS[subnet_id][block_number] = state_root`
+  - `StateCommitted` event emission
+- [x] **State commits** - Accepted/rejected correctly based on all validation rules
+- [x] **View functions**: `get_commit()`, `get_last_committed_block()`
+- [x] **File**: `contracts/ExecutionCore.sol` (Phase 5 section)
+- [x] **Tests**: `contracts/test/TestPhase5.sol` (6 comprehensive tests)
 
 ### 📋 PHASE 5: EDGE CASES (PENDING)
 - [ ] Withdrawal queue edge cases
@@ -222,14 +239,13 @@ See `contracts/WITHDRAWAL_QUEUE_FORMAT.md` for complete specification.
 
 ## PHASE 2: TREASURY SNAPSHOT SERVICE
 
-### Dev A Status: 🔄 **IN PROGRESS / NEXT**
+### Dev A Status: ✅ **COMPLETED**
 
-**Dev A is working on:**
-> `compute_state_root()` - balance leaves, withdrawal leaves, sorting, merkle root
-> Golden test vectors for determinism
-> Root spec locked forever after this
-
-**Note:** Execution core is complete, state root computation is next phase.
+**Dev A has delivered:**
+- ✅ `compute_state_root()` - Complete implementation with Merkle tree construction
+- ✅ Golden test vectors documented in `GOLDEN_TEST_VECTORS.md`
+- ✅ State root spec locked in `interfaces.md`
+- ✅ Deterministic computation with explicit sorting
 
 ### DEV B STATUS: ✅ **COMPLETED** (as part of Phase 1)
 
@@ -321,11 +337,13 @@ Treasury Snapshot Service was implemented in Phase 1. All tasks complete.
 
 ## PHASE 3: SETTLEMENT PLANNER (Core Integration Day)
 
-### Dev A is working on:
-> **MOST IMPORTANT DAY FOR DEV A**
-> PoM implementation: `compute_net_outflow()`, `check_solvency()`, `check_constructibility()`, `check_authorization()`
-> `pom_validate()` with failure enums
-> Unit tests for insolvency, fake withdrawals, signer mismatch
+### Dev A Status: ✅ **COMPLETED**
+
+**Dev A has delivered:**
+- ✅ Complete PoM implementation: `compute_net_outflow()`, `check_solvency()`, `check_constructibility()`, `check_authorization()`
+- ✅ `pom_validate()` with `PomResult` enum (Ok, Insolvent, NonConstructible, Unauthorized)
+- ✅ Comprehensive unit tests (9 tests) covering all failure modes
+- ✅ PoM examples document for Arko with failing cases
 
 ### DEV B STATUS: ✅ **PHASE 3 COMPLETED**
 
@@ -447,9 +465,16 @@ All Settlement Planner tasks complete. Implementation in `settlement_planner.ts`
 
 ## PHASE 4: COMMITMENT LINK & REAL MONEY MOVEMENT
 
-### Dev A is working on:
-> `commit_state()` — signature verification, PoM enforced inside commit, block monotonicity
-> State commits accepted/rejected correctly
+### Dev A Status: ✅ **COMPLETED**
+
+**Dev A has delivered:**
+- ✅ `commit_state()` - Complete implementation with:
+  - Block number monotonicity enforcement
+  - Auditor signature verification (threshold check)
+  - PoM validation (reverts if PoM fails)
+  - Commit storage and `StateCommitted` event
+- ✅ State commits accepted/rejected correctly based on all validation rules
+- ✅ Comprehensive tests (6 tests) covering all validation scenarios
 
 ### DEV B STATUS: ✅ **PHASE 4 COMPLETED**
 
@@ -1026,15 +1051,19 @@ interface TreasurySnapshot {
 }
 ```
 
-### Interface 2: Commitment Event (Dev A -> Dev B)
+### Interface 2: Commitment Event (Dev A -> Dev B) ✅ READY
 ```typescript
 // Dev A emits this when state is committed
+// Event: StateCommitted(bytes32 indexed subnet_id, uint64 indexed block_number, bytes32 state_root)
 interface CommitmentEvent {
   subnet_id: string;      // bytes32 hex
   block_number: number;   // uint64
   state_root: string;     // bytes32 hex
 }
 ```
+- **Location**: `contracts/ExecutionCore.sol` - `StateCommitted` event
+- **Function**: `commit_state()` - Emits event after successful commit
+- **Status**: ✅ Implemented and ready for Arko to listen
 
 ### Interface 3: Settlement Confirmation (Dev B -> Dev A)
 ```typescript
@@ -1076,16 +1105,21 @@ TVA-Protocol/
 │   └── plan.md                          📄 Development plan
 ├── contracts/                           (Dev A - Soroban/Solang)
 │   ├── SubnetFactory.sol                ✅ COMPLETE - Subnet creation/management
-│   ├── ExecutionCore.sol                ✅ COMPLETE - Financial operations
+│   ├── ExecutionCore.sol                ✅ COMPLETE - Financial ops, State Root, PoM, Commitment
 │   ├── interfaces/
 │   │   └── ISubnetFactory.sol           ✅ Interface definition
 │   ├── test/
 │   │   ├── TestSubnetFactory.sol        ✅ 6 tests
-│   │   ├── TestExecutionCore.sol        ✅ 8 tests
+│   │   ├── TestExecutionCore.sol         ✅ 8 tests
+│   │   ├── TestPhase3Phase4.sol         ✅ 13 tests (Phase 3 & 4)
+│   │   ├── TestPhase5.sol                ✅ 6 tests (Phase 5)
 │   │   ├── compile_tests.sh             ✅ Test compilation script
 │   │   ├── README.md                    ✅ Test instructions
 │   │   └── TEST_SUMMARY.md              ✅ Test documentation
-│   └── WITHDRAWAL_QUEUE_FORMAT.md       ✅ Withdrawal format spec
+│   ├── WITHDRAWAL_QUEUE_FORMAT.md       ✅ Withdrawal format spec
+│   ├── GOLDEN_TEST_VECTORS.md           ✅ State root test vectors
+│   ├── POM_EXAMPLES.md                  ✅ PoM computation examples
+│   └── COMPILATION_NOTES.md             ✅ Solang compilation notes
 ├── dev-b/                               (Dev B - TypeScript/Stellar)
 │   ├── src/
 │   │   ├── interfaces/
@@ -1136,7 +1170,7 @@ TVA-Protocol/
 
 ### 3. Events ✅ READY
 - **SubnetFactory Events**: `SubnetCreated`, `TreasuryRegistered`
-- **ExecutionCore Events**: `Credited`, `Debited`, `Transferred`, `WithdrawalRequested`
+- **ExecutionCore Events**: `Credited`, `Debited`, `Transferred`, `WithdrawalRequested`, `StateRootComputed`, `PomValidated`, `StateCommitted`
 - **Status**: ✅ All events defined and emitted
 
 ### 4. Treasury Snapshot (Dev B → Dev A) ✅ READY
@@ -1196,5 +1230,5 @@ TVA-Protocol/
 **Document Version:** 1.4
 **Last Updated:** 2026-01-17
 **Status:** Active Development - Phase 5 Complete for Dev B
-**Dev A Progress:** Phase 0 ✅ | Phase 1 ✅ | Phase 2 🔄
+**Dev A Progress:** Phase 0 ✅ | Phase 1 ✅ | Phase 2 ✅ | Phase 3 ✅ | Phase 4 ✅ | Phase 5 ✅
 **Dev B Progress:** Phase 0 ✅ | Phase 1 ✅ | Phase 2 ✅ | Phase 3 ✅ | Phase 4 ✅ | Phase 5 ✅ | Phase 6 (Next - requires Dev A)

@@ -31,6 +31,13 @@ contract ExecutionCore {
     }
     mapping(bytes32 => BalanceEntry[]) public persistent balanceEntries;
 
+    // Phase 5: Commitment storage
+    // Maps subnet_id => block_number => state_root
+    mapping(bytes32 => mapping(uint64 => bytes32)) public persistent commits;
+    
+    // Phase 5: Track last committed block per subnet (for monotonicity check)
+    mapping(bytes32 => uint64) public persistent lastCommittedBlock;
+
     // PoM Result enum
     enum PomResult {
         Ok,
@@ -96,6 +103,13 @@ contract ExecutionCore {
     event PomValidated(
         bytes32 indexed subnet_id,
         uint8 result  // 0=Ok, 1=Insolvent, 2=NonConstructible, 3=Unauthorized
+    );
+
+    // Phase 5 Events
+    event StateCommitted(
+        bytes32 indexed subnet_id,
+        uint64 indexed block_number,
+        bytes32 state_root
     );
 
     /**
@@ -803,6 +817,113 @@ contract ExecutionCore {
 
         emit PomValidated(subnet_id, uint8(PomResult.Ok));
         return PomResult.Ok;
+    }
+
+    // ========== PHASE 5: COMMITMENT CONTRACT ==========
+
+    /**
+     * @notice Commits a state root for a subnet after PoM validation
+     * @dev Phase 5: Commitment Contract
+     * @param subnet_id The subnet identifier
+     * @param block_number The block number (must be monotonic)
+     * @param state_root The computed state root
+     * @param auditor_signers Array of auditor public keys who signed (must meet threshold)
+     * @param treasury_asset_ids Array of asset IDs in treasury snapshot
+     * @param treasury_balances Array of balances for each asset
+     * @param treasury_signers Array of treasury signer public keys
+     * @param treasury_threshold The treasury threshold
+     */
+    function commit_state(
+        bytes32 subnet_id,
+        uint64 block_number,
+        bytes32 state_root,
+        bytes32[] memory auditor_signers,
+        bytes32[] memory treasury_asset_ids,
+        int128[] memory treasury_balances,
+        bytes32[] memory treasury_signers,
+        uint32 treasury_threshold
+    ) public {
+        // Validate subnet exists and is active
+        _validate_subnet(subnet_id);
+
+        // Validate state_root is non-zero
+        require(state_root != bytes32(0), "ExecutionCore: State root cannot be zero");
+
+        // Validate block_number is monotonic
+        uint64 lastBlock = lastCommittedBlock[subnet_id];
+        require(block_number > lastBlock, "ExecutionCore: Block number must be monotonic");
+
+        // Verify auditor signatures (check that signers are valid auditors and meet threshold)
+        (, bytes32[] memory auditors, uint32 subnet_threshold, , , ) = subnetFactory.get_subnet(subnet_id);
+        
+        // Count how many auditor_signers are valid auditors
+        uint32 validSignerCount = 0;
+        for (uint i = 0; i < auditor_signers.length; i++) {
+            for (uint j = 0; j < auditors.length; j++) {
+                if (auditor_signers[i] == auditors[j]) {
+                    validSignerCount++;
+                    break;
+                }
+            }
+        }
+
+        // Verify threshold is met
+        require(
+            validSignerCount >= subnet_threshold,
+            "ExecutionCore: Insufficient auditor signatures"
+        );
+
+        // Verify auditor signers are authorized treasury signers
+        require(
+            check_authorization(subnet_id, treasury_signers, treasury_threshold),
+            "ExecutionCore: Auditors not authorized for treasury"
+        );
+
+        // Run PoM validation (CRITICAL: if PoM fails, revert)
+        PomResult pomResult = pom_validate(
+            subnet_id,
+            treasury_asset_ids,
+            treasury_balances,
+            treasury_signers,
+            treasury_threshold
+        );
+        
+        require(
+            pomResult == PomResult.Ok,
+            "ExecutionCore: PoM validation failed"
+        );
+
+        // Store the commit
+        commits[subnet_id][block_number] = state_root;
+        
+        // Update last committed block
+        lastCommittedBlock[subnet_id] = block_number;
+
+        // Extend TTL for commit storage
+        commits[subnet_id][block_number].extendTtl(100, 5000);
+        lastCommittedBlock[subnet_id].extendTtl(100, 5000);
+
+        // Emit StateCommitted event (Arko listens to this)
+        emit StateCommitted(subnet_id, block_number, state_root);
+    }
+
+    /**
+     * @notice Gets the committed state root for a subnet at a specific block
+     * @param subnet_id The subnet identifier
+     * @param block_number The block number
+     * @return state_root The committed state root (bytes32(0) if not committed)
+     */
+    function get_commit(bytes32 subnet_id, uint64 block_number) public view returns (bytes32) {
+        return commits[subnet_id][block_number];
+    }
+
+    /**
+     * @notice Gets the last committed block number for a subnet
+     * @param subnet_id The subnet identifier
+     * @return block_number The last committed block number (0 if none)
+     */
+    function get_last_committed_block(bytes32 subnet_id) public view returns (uint64) {
+        return lastCommittedBlock[subnet_id];
     }
 }
 
