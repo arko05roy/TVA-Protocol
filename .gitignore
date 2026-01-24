@@ -1,74 +1,47 @@
-# Byte-compiled / optimized / DLL files
-__pycache__/
-*.py[cod]
-*$py.class
-
-# C extensions
-*.so
-
-# Distribution / packaging
-.Python
-env/
-venv/
-ENV/
-build/
-develop-eggs/
-dist/
-downloads/
-eggs/
-.eggs/
-lib/
-lib64/
-parts/
-sdist/
-var/
-*.egg-info/
-.installed.cfg
-*.egg
-
-# Installer logs
-pip-log.txt
-pip-delete-this-directory.txt
-
-# Unit test / coverage reports
-htmlcov/
-.tox/
-.nox/
-.coverage
-.coverage.*
-.cache
-nosetests.xml
-coverage.xml
-*.cover
-.hypothesis/
-
-# Jupyter Notebook
-.ipynb_checkpoints
-
-# pyenv
-.python-version
-
-# mypy
-.mypy_cache/
-.dmypy.json
-dmypy.json
-
-# VS Code
-.vscode/
-
-# MacOS
-.DS_Store
-
-# IDEs
-.idea/
-*.iml
-
-# Logs
-*.log
-
 # Tooling - binaries and build artifacts
 tooling/bin/
 tooling/llvm16/extracted/
 tooling/solang/target/
 tooling/**/*.tar.gz
 tooling/**/*.tar
+
+# Compiled contract artifacts
+contracts/artifacts/
+*.wasm
+*.abi
+
+# Node modules
+node_modules/
+package-lock.json
+
+# Rust build artifacts
+target/
+Cargo.lock
+
+# Environment and secrets
+.env
+.env.*
+*.key
+*.pem
+
+# IDE
+.vscode/
+.idea/
+*.iml
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+
+# Coverage
+coverage/
+.nyc_output/
+
+# Python (dev scripts)
+__pycache__/
+*.py[cod]
+venv/
+.venv/
