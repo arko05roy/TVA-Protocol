@@ -10,6 +10,13 @@
  * event StateCommitted(bytes32 indexed subnet_id, uint64 indexed block_number, bytes32 state_root)
  */
 
+import {
+  rpc,
+  xdr,
+  Contract,
+  nativeToScVal,
+  scValToNative,
+} from '@stellar/stellar-sdk';
 import { CommitmentEvent, NetworkConfig, TESTNET_CONFIG } from '../interfaces/types';
 
 /**
@@ -116,6 +123,9 @@ export class SorobanCommitmentEventSource implements ICommitmentEventSource {
   private contractId: string;
   private networkConfig: NetworkConfig;
   private pollIntervalMs: number;
+  private server: rpc.Server;
+  private lastCursor: string | undefined;
+  private startLedger: number | undefined;
 
   constructor(
     contractId: string,
@@ -125,6 +135,7 @@ export class SorobanCommitmentEventSource implements ICommitmentEventSource {
     this.contractId = contractId;
     this.networkConfig = networkConfig;
     this.pollIntervalMs = pollIntervalMs;
+    this.server = new rpc.Server(this.getSorobanRpcUrl());
   }
 
   start(handler: (event: CommitmentEvent) => Promise<void>): void {
@@ -163,32 +174,48 @@ export class SorobanCommitmentEventSource implements ICommitmentEventSource {
     if (!this.running || !this.handler) return;
 
     try {
-      // TODO: Implement actual Soroban RPC event polling
-      // This requires:
-      // 1. Connect to Soroban RPC endpoint
-      // 2. Call getEvents with filter for StateCommitted topic
-      // 3. Parse events and convert to CommitmentEvent
-      // 4. Call handler for each new event
+      // If no startLedger set, get the latest ledger to start from
+      if (!this.startLedger && !this.lastCursor) {
+        const network = await this.server.getNetwork();
+        // Start from a recent ledger (current - small buffer)
+        const latestLedger = await this.server.getLatestLedger();
+        this.startLedger = latestLedger.sequence;
+      }
 
-      // Placeholder for Soroban RPC call:
-      // const sorobanRpc = new SorobanRpc.Server(this.getSorobanRpcUrl());
-      // const events = await sorobanRpc.getEvents({
-      //   startLedger: this.lastProcessedLedger,
-      //   filters: [{
-      //     type: 'contract',
-      //     contractIds: [this.contractId],
-      //     topics: [['StateCommitted']]
-      //   }]
-      // });
+      // Build the event topic filter for StateCommitted
+      // Solang emits event name as Symbol in topic[0]
+      const eventNameScVal = xdr.ScVal.scvSymbol('StateCommitted');
+      const eventNameBase64 = eventNameScVal.toXDR('base64');
 
-      // For now, this is a no-op until contract is deployed
+      const request: rpc.Server.GetEventsRequest = {
+        filters: [{
+          type: 'contract' as const,
+          contractIds: [this.contractId],
+          topics: [[eventNameBase64, '*', '*']],
+        }],
+        ...(this.lastCursor
+          ? { cursor: this.lastCursor }
+          : { startLedger: this.startLedger }),
+        limit: 100,
+      };
+
+      const response = await this.server.getEvents(request);
+
+      for (const event of response.events) {
+        const parsed = this.parseEvent(event);
+        if (parsed && this.handler) {
+          await this.handler(parsed);
+          this.lastProcessedBlock = parsed.block_number;
+        }
+        // Update cursor for next poll
+        this.lastCursor = event.pagingToken;
+      }
     } catch (error) {
       console.error('Error polling for commitment events:', error);
     }
   }
 
   private getSorobanRpcUrl(): string {
-    // Soroban RPC URL (different from Horizon)
     if (this.networkConfig.isTestnet) {
       return 'https://soroban-testnet.stellar.org';
     }
@@ -196,18 +223,50 @@ export class SorobanCommitmentEventSource implements ICommitmentEventSource {
   }
 
   /**
-   * Parse a Soroban event into a CommitmentEvent
-   * This will be implemented when contract is deployed
+   * Parse a Soroban EventResponse into a CommitmentEvent
+   *
+   * Event structure from Solang-compiled Soroban contract:
+   * - topic[0]: Symbol "StateCommitted"
+   * - topic[1]: subnet_id (bytes32, indexed)
+   * - topic[2]: block_number (uint64, indexed)
+   * - value: state_root (bytes32)
    */
-  private parseEvent(rawEvent: unknown): CommitmentEvent | null {
-    // TODO: Implement parsing of Soroban event XDR
-    // The event topics contain:
-    // - topic[0]: event name hash
-    // - topic[1]: subnet_id (indexed)
-    // - topic[2]: block_number (indexed)
-    // - data: state_root
+  private parseEvent(rawEvent: rpc.Api.EventResponse): CommitmentEvent | null {
+    try {
+      const topics = rawEvent.topic;
+      if (!topics || topics.length < 3) {
+        return null;
+      }
 
-    return null;
+      // topic[1] is subnet_id as bytes32
+      const subnetIdNative = scValToNative(topics[1]);
+      const subnetId = Buffer.isBuffer(subnetIdNative)
+        ? '0x' + subnetIdNative.toString('hex')
+        : typeof subnetIdNative === 'string'
+          ? (subnetIdNative.startsWith('0x') ? subnetIdNative : '0x' + subnetIdNative)
+          : '0x' + Buffer.from(subnetIdNative).toString('hex');
+
+      // topic[2] is block_number as uint64
+      const blockNumberNative = scValToNative(topics[2]);
+      const blockNumber = BigInt(blockNumberNative);
+
+      // value is state_root as bytes32
+      const stateRootNative = scValToNative(rawEvent.value);
+      const stateRoot = Buffer.isBuffer(stateRootNative)
+        ? '0x' + stateRootNative.toString('hex')
+        : typeof stateRootNative === 'string'
+          ? (stateRootNative.startsWith('0x') ? stateRootNative : '0x' + stateRootNative)
+          : '0x' + Buffer.from(stateRootNative).toString('hex');
+
+      return {
+        subnet_id: subnetId,
+        block_number: blockNumber,
+        state_root: stateRoot,
+      };
+    } catch (error) {
+      console.error('Error parsing commitment event:', error);
+      return null;
+    }
   }
 }
 

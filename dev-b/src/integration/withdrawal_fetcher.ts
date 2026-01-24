@@ -20,6 +20,17 @@
  * }
  */
 
+import {
+  rpc,
+  xdr,
+  Contract,
+  TransactionBuilder,
+  Networks,
+  Account,
+  nativeToScVal,
+  scValToNative,
+  BASE_FEE,
+} from '@stellar/stellar-sdk';
 import { WithdrawalIntent, NetworkConfig, TESTNET_CONFIG } from '../interfaces/types';
 
 /**
@@ -152,48 +163,63 @@ export class MockWithdrawalFetcher implements IWithdrawalFetcher {
 export class SorobanWithdrawalFetcher implements IWithdrawalFetcher {
   private contractId: string;
   private networkConfig: NetworkConfig;
+  private server: rpc.Server;
+  private contract: Contract;
 
   constructor(contractId: string, networkConfig: NetworkConfig = TESTNET_CONFIG) {
     this.contractId = contractId;
     this.networkConfig = networkConfig;
+    this.server = new rpc.Server(this.getSorobanRpcUrl());
+    this.contract = new Contract(contractId);
   }
 
   async fetchWithdrawals(
     subnetId: string,
     blockNumber: bigint
   ): Promise<WithdrawalIntent[]> {
-    // TODO: Implement actual Soroban RPC contract call
-    // This requires:
-    // 1. Build a transaction to call get_withdrawal_queue(subnet_id)
-    // 2. Use simulateTransaction to execute (read-only)
-    // 3. Parse the result XDR into WithdrawalIntent[]
+    // Build a contract call operation for get_withdrawal_queue(bytes32 subnet_id)
+    const subnetIdBytes = Buffer.from(subnetId.replace('0x', ''), 'hex');
+    const subnetIdScVal = xdr.ScVal.scvBytes(subnetIdBytes);
 
-    // Placeholder implementation:
-    // const sorobanRpc = new SorobanRpc.Server(this.getSorobanRpcUrl());
-    //
-    // // Build the contract call
-    // const contract = new Contract(this.contractId);
-    // const call = contract.call(
-    //   'get_withdrawal_queue',
-    //   xdr.ScVal.scvBytes(Buffer.from(subnetId.replace('0x', ''), 'hex'))
-    // );
-    //
-    // // Simulate the transaction
-    // const result = await sorobanRpc.simulateTransaction(call);
-    //
-    // // Parse the result
-    // return this.parseWithdrawalQueue(result);
+    const operation = this.contract.call('get_withdrawal_queue', subnetIdScVal);
 
-    throw new Error(
-      'SorobanWithdrawalFetcher: Contract not deployed. Use MockWithdrawalFetcher for testing.'
+    // Create a dummy source account for simulation (read-only call)
+    const dummySource = new Account(
+      'GAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAWHF',
+      '0'
     );
+
+    const networkPassphrase = this.networkConfig.isTestnet
+      ? Networks.TESTNET
+      : Networks.PUBLIC;
+
+    const transaction = new TransactionBuilder(dummySource, {
+      fee: BASE_FEE,
+      networkPassphrase,
+    })
+      .addOperation(operation)
+      .setTimeout(30)
+      .build();
+
+    const simResponse = await this.server.simulateTransaction(transaction);
+
+    if (rpc.Api.isSimulationError(simResponse)) {
+      throw new Error(
+        `Contract simulation failed: ${(simResponse as rpc.Api.SimulateTransactionErrorResponse).error}`
+      );
+    }
+
+    const successResponse = simResponse as rpc.Api.SimulateTransactionSuccessResponse;
+    if (!successResponse.result) {
+      return [];
+    }
+
+    return this.parseWithdrawalQueue(successResponse.result.retval);
   }
 
   async getPendingCount(subnetId: string): Promise<number> {
-    // TODO: Call get_withdrawal_queue_length(subnet_id) on contract
-    throw new Error(
-      'SorobanWithdrawalFetcher: Contract not deployed. Use MockWithdrawalFetcher for testing.'
-    );
+    const withdrawals = await this.fetchWithdrawals(subnetId, 0n);
+    return withdrawals.length;
   }
 
   private getSorobanRpcUrl(): string {
@@ -204,24 +230,61 @@ export class SorobanWithdrawalFetcher implements IWithdrawalFetcher {
   }
 
   /**
-   * Parse withdrawal queue from Soroban contract response
-   * Will be implemented when contract is deployed
+   * Parse withdrawal queue from Soroban contract response.
+   *
+   * The return value is a Vec of Withdrawal structs from Solang:
+   * struct Withdrawal {
+   *   bytes32 withdrawal_id;
+   *   bytes32 user_id;
+   *   string asset_code;
+   *   bytes32 issuer;        // "NATIVE" for XLM
+   *   int128 amount;
+   *   bytes32 destination;
+   * }
+   *
+   * In Soroban ScVal, this becomes a Vec of Maps (struct fields as map entries).
    */
-  private parseWithdrawalQueue(rawResult: unknown): WithdrawalIntent[] {
-    // TODO: Parse the XDR response from contract
-    // The response is an array of Withdrawal structs
+  private parseWithdrawalQueue(retval: xdr.ScVal): WithdrawalIntent[] {
+    const nativeResult = scValToNative(retval);
 
-    // Expected format from contract:
-    // struct Withdrawal {
-    //   bytes32 withdrawal_id;
-    //   bytes32 user_id;
-    //   string asset_code;
-    //   bytes32 issuer;
-    //   int128 amount;
-    //   bytes32 destination;
-    // }
+    if (!Array.isArray(nativeResult)) {
+      return [];
+    }
 
-    return [];
+    return nativeResult.map((item: any) => {
+      // Solang structs are represented as maps or structs in ScVal
+      // scValToNative converts them to plain objects
+      const withdrawalId = this.toHexString(item.withdrawal_id ?? item[0]);
+      const userId = this.toHexString(item.user_id ?? item[1]);
+      const assetCode = typeof (item.asset_code ?? item[2]) === 'string'
+        ? (item.asset_code ?? item[2])
+        : Buffer.from(item.asset_code ?? item[2]).toString('utf8').replace(/\0/g, '');
+      const issuer = this.toHexString(item.issuer ?? item[3]);
+      const amount = BigInt(item.amount ?? item[4]).toString();
+      const destination = this.toHexString(item.destination ?? item[5]);
+
+      return {
+        withdrawal_id: withdrawalId,
+        user_id: userId,
+        asset_code: assetCode,
+        issuer: issuer,
+        amount: amount,
+        destination: destination,
+      };
+    });
+  }
+
+  private toHexString(val: any): string {
+    if (Buffer.isBuffer(val)) {
+      return '0x' + val.toString('hex');
+    }
+    if (typeof val === 'string') {
+      return val.startsWith('0x') ? val : '0x' + val;
+    }
+    if (val instanceof Uint8Array) {
+      return '0x' + Buffer.from(val).toString('hex');
+    }
+    return '0x' + String(val);
   }
 }
 
