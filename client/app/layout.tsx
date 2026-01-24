@@ -1,22 +1,22 @@
 import type { Metadata } from "next";
-import { Space_Mono, Syne } from "next/font/google";
+import { IBM_Plex_Mono, Outfit } from "next/font/google";
 import "./globals.css";
 
-const syne = Syne({
-  variable: "--font-syne",
+const outfit = Outfit({
+  variable: "--font-outfit",
   subsets: ["latin"],
-  weight: ["400", "500", "600", "700", "800"],
+  weight: ["300", "400", "500", "600", "700", "800", "900"],
 });
 
-const spaceMono = Space_Mono({
-  variable: "--font-space-mono",
+const ibmPlexMono = IBM_Plex_Mono({
+  variable: "--font-mono",
   subsets: ["latin"],
-  weight: ["400", "700"],
+  weight: ["400", "500", "600"],
 });
 
 export const metadata: Metadata = {
-  title: "Astraeus | Proof-of-Money Settlement Layer",
-  description: "A Proof-of-Money Settlement Layer for Parallel Financial Execution on Stellar. Execution may be wrong. Money must never be.",
+  title: "mrkl | EVM on Stellar",
+  description: "Compile Solidity. Settle on Stellar. 5-second finality, near-zero fees. The EVM compatibility layer that compiles, not interprets.",
 };
 
 export default function RootLayout({
@@ -27,7 +27,7 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body
-        className={`${syne.variable} ${spaceMono.variable} antialiased`}
+        className={`${outfit.variable} ${ibmPlexMono.variable} antialiased`}
       >
         {children}
       </body>
