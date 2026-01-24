@@ -1,4 +1,4 @@
-# TVA Protocol -- Tasks: Arko (Integration / Tooling Dev)
+# mrkl -- Tasks: Arko (Integration / Tooling Dev)
 
 Role: Developer SDK, framework plugins, frontend libraries, documentation, testing tools, developer portal, block explorer.
 
@@ -26,7 +26,7 @@ Role: Developer SDK, framework plugins, frontend libraries, documentation, testi
 ### K-2: Developer SDK (@tva-protocol/sdk)
 - **Priority:** P0
 - **Phase:** 2-3
-- **Description:** Build a TypeScript/JavaScript SDK that provides high-level APIs for interacting with TVA Protocol. Wraps the RPC layer with type-safe contract interaction, account management, and compilation utilities.
+- **Description:** Build a TypeScript/JavaScript SDK that provides high-level APIs for interacting with mrkl. Wraps the RPC layer with type-safe contract interaction, account management, and compilation utilities.
 - **Deliverables:**
   - npm package: `@tva-protocol/sdk`
   - Contract compilation API (wraps Solang binary invocation)
@@ -45,7 +45,7 @@ Role: Developer SDK, framework plugins, frontend libraries, documentation, testi
 ### K-3: Foundry Integration Guide and Adapter
 - **Priority:** P1
 - **Phase:** 3
-- **Description:** Create a Foundry-compatible workflow for TVA Protocol. Since Foundry uses forge/cast which communicate via JSON-RPC, the primary work is configuration and documentation. Build a thin adapter if needed for compilation (since Foundry uses solc natively).
+- **Description:** Create a Foundry-compatible workflow for mrkl. Since Foundry uses forge/cast which communicate via JSON-RPC, the primary work is configuration and documentation. Build a thin adapter if needed for compilation (since Foundry uses solc natively).
 - **Deliverables:**
   - Foundry configuration guide (`foundry.toml` for TVA networks)
   - Custom `forge script` examples for TVA deployment
@@ -64,7 +64,7 @@ Role: Developer SDK, framework plugins, frontend libraries, documentation, testi
 ### K-4: Wallet Integration (MetaMask + Custom Wallet Adapter)
 - **Priority:** P0
 - **Phase:** 2
-- **Description:** Build the wallet adapter that enables MetaMask (and other EVM wallets) to work with TVA Protocol. Handle the dual-key challenge: EVM wallets sign with secp256k1, but Stellar needs Ed25519. The adapter manages key derivation and transaction re-signing.
+- **Description:** Build the wallet adapter that enables MetaMask (and other EVM wallets) to work with mrkl. Handle the dual-key challenge: EVM wallets sign with secp256k1, but Stellar needs Ed25519. The adapter manages key derivation and transaction re-signing.
 - **Deliverables:**
   - MetaMask custom network configuration (chainId, RPC URL, native currency as XLM)
   - TVA Wallet Adapter library (browser extension or embedded module)
@@ -80,11 +80,11 @@ Role: Developer SDK, framework plugins, frontend libraries, documentation, testi
 ### K-5: ethers.js / viem Adapter (@tva-protocol/ethers-adapter)
 - **Priority:** P1
 - **Phase:** 3
-- **Description:** Build an adapter layer that makes ethers.js (v6) and viem work seamlessly with TVA Protocol. Handle any edge cases where TVA's RPC responses differ from standard Ethereum expectations (e.g., gas values, block structure, log format).
+- **Description:** Build an adapter layer that makes ethers.js (v6) and viem work seamlessly with mrkl. Handle any edge cases where TVA's RPC responses differ from standard Ethereum expectations (e.g., gas values, block structure, log format).
 - **Deliverables:**
   - npm package: `@tva-protocol/ethers-adapter`
   - Custom `JsonRpcProvider` subclass with TVA-specific handling
-  - Custom `Signer` implementation that integrates with wallet adapter
+  - Custom `Signer` implementation th at integrates with wallet adapter
   - Block/receipt type mapping (handle Stellar-specific fields)
   - Gas estimation override (translate Soroban resources to gas equivalent)
   - Event/log filtering with proper topic encoding
@@ -196,7 +196,7 @@ Role: Developer SDK, framework plugins, frontend libraries, documentation, testi
 ### K-11: Example DApps and Templates
 - **Priority:** P2
 - **Phase:** 3-4
-- **Description:** Build reference decentralized applications that demonstrate TVA Protocol capabilities. Include a token swap, an NFT minting page, and a governance interface. These serve as both validation and marketing materials.
+- **Description:** Build reference decentralized applications that demonstrate mrkl capabilities. Include a token swap, an NFT minting page, and a governance interface. These serve as both validation and marketing materials.
 - **Deliverables:**
   - Token swap DApp (React + ethers.js + TVA adapter)
     - Uses TVAToken contract for demo tokens

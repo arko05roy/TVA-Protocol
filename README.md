@@ -1,8 +1,8 @@
-# TVA Protocol
+# mrkl
 
 **EVM Compatibility Layer on Stellar**
 
-TVA Protocol enables developers to write standard Solidity smart contracts and deploy them to Stellar's Soroban smart contract platform. The core pipeline uses the Solang compiler to translate Solidity into Soroban-compatible WebAssembly, while an EVM-compatible RPC layer translates Ethereum-format transactions into Stellar transactions.
+mrkl enables developers to write standard Solidity smart contracts and deploy them to Stellar's Soroban smart contract platform. The core pipeline uses the Solang compiler to translate Solidity into Soroban-compatible WebAssembly, while an EVM-compatible RPC layer translates Ethereum-format transactions into Stellar transactions.
 
 Write Solidity. Deploy to Stellar. Settle in 5 seconds.
 

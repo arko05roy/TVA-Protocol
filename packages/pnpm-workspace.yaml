@@ -1,0 +1,4 @@
+packages:
+  - "sdk"
+  - "hardhat-plugin"
+  - "wallet-adapter"

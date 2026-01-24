@@ -2,7 +2,7 @@ pragma solidity 0;
 
 /**
  * @title AccountRegistry
- * @notice Maps EVM-derived accounts to Stellar accounts for the TVA Protocol
+ * @notice Maps EVM-derived accounts to Stellar accounts for the mrkl
  *         address translation layer. Enables the RPC layer to resolve
  *         Ethereum-originated addresses to corresponding Stellar accounts.
  *

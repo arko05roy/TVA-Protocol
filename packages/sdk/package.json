@@ -1,0 +1,75 @@
+{
+  "name": "@tva-protocol/sdk",
+  "version": "0.1.0",
+  "description": "TypeScript SDK for TVA Protocol - EVM compatibility layer on Stellar",
+  "main": "dist/index.js",
+  "module": "dist/index.mjs",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "import": "./dist/index.mjs",
+      "require": "./dist/index.js",
+      "types": "./dist/index.d.ts"
+    },
+    "./compiler": {
+      "import": "./dist/compiler/index.mjs",
+      "require": "./dist/compiler/index.js",
+      "types": "./dist/compiler/index.d.ts"
+    },
+    "./wallet": {
+      "import": "./dist/wallet/index.mjs",
+      "require": "./dist/wallet/index.js",
+      "types": "./dist/wallet/index.d.ts"
+    }
+  },
+  "scripts": {
+    "build": "tsup",
+    "dev": "tsup --watch",
+    "test": "vitest",
+    "test:coverage": "vitest --coverage",
+    "lint": "eslint src/",
+    "typecheck": "tsc --noEmit",
+    "clean": "rm -rf dist"
+  },
+  "dependencies": {
+    "@stellar/stellar-sdk": "^13.1.0",
+    "ethers": "^6.13.4",
+    "tweetnacl": "^1.0.3",
+    "bip39": "^3.1.0",
+    "@noble/hashes": "^1.6.1",
+    "@noble/secp256k1": "^2.1.0",
+    "@noble/ed25519": "^2.1.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "typescript": "^5.7.2",
+    "tsup": "^8.3.5",
+    "vitest": "^2.1.8",
+    "eslint": "^9.16.0",
+    "@typescript-eslint/eslint-plugin": "^8.18.0",
+    "@typescript-eslint/parser": "^8.18.0"
+  },
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "keywords": [
+    "tva",
+    "stellar",
+    "soroban",
+    "evm",
+    "solidity",
+    "ethereum",
+    "smart-contracts",
+    "sdk"
+  ],
+  "author": "TVA Protocol",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/tva-protocol/tva"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}

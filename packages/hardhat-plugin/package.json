@@ -1,0 +1,59 @@
+{
+  "name": "@tva-protocol/hardhat-plugin",
+  "version": "0.1.0",
+  "description": "Hardhat plugin for TVA Protocol - compile and deploy Solidity to Stellar/Soroban",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "import": "./dist/index.mjs",
+      "require": "./dist/index.js",
+      "types": "./dist/index.d.ts"
+    }
+  },
+  "scripts": {
+    "build": "tsup",
+    "dev": "tsup --watch",
+    "test": "vitest",
+    "lint": "eslint src/",
+    "typecheck": "tsc --noEmit",
+    "clean": "rm -rf dist"
+  },
+  "dependencies": {
+    "@tva-protocol/sdk": "workspace:*"
+  },
+  "peerDependencies": {
+    "hardhat": "^2.19.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "hardhat": "^2.22.17",
+    "typescript": "^5.7.2",
+    "tsup": "^8.3.5",
+    "vitest": "^2.1.8",
+    "eslint": "^9.16.0"
+  },
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "keywords": [
+    "tva",
+    "hardhat",
+    "hardhat-plugin",
+    "stellar",
+    "soroban",
+    "solidity",
+    "ethereum",
+    "smart-contracts"
+  ],
+  "author": "TVA Protocol",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/tva-protocol/tva"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}

@@ -1,9 +1,9 @@
-TVA Protocol
+mrkl
 An EVM Compatibility Layer on Stellar via Compilation-Based Translation
 
 Abstract
 
-TVA Protocol is an EVM compatibility layer that enables developers to write standard Solidity smart contracts and deploy them natively to Stellar's Soroban smart contract platform. Rather than interpreting EVM bytecode within a runtime environment, TVA compiles Solidity source code through the Solang compiler's LLVM-based pipeline to produce Soroban-compatible WebAssembly modules. A complementary RPC translation layer converts Ethereum JSON-RPC calls into Stellar/Soroban API calls, enabling unmodified EVM tooling (Hardhat, Foundry, ethers.js, MetaMask) to interact with contracts settled on Stellar.
+mrkl is an EVM compatibility layer that enables developers to write standard Solidity smart contracts and deploy them natively to Stellar's Soroban smart contract platform. Rather than interpreting EVM bytecode within a runtime environment, TVA compiles Solidity source code through the Solang compiler's LLVM-based pipeline to produce Soroban-compatible WebAssembly modules. A complementary RPC translation layer converts Ethereum JSON-RPC calls into Stellar/Soroban API calls, enabling unmodified EVM tooling (Hardhat, Foundry, ethers.js, MetaMask) to interact with contracts settled on Stellar.
 
 The result is a system where developers retain their existing Solidity workflow and toolchain while inheriting Stellar's 5-second deterministic finality, sub-cent transaction fees, and native multi-asset infrastructure. This paper formalizes the architecture, details the compilation pipeline, specifies the translation layer, analyzes the security model, and positions TVA relative to existing EVM compatibility solutions.
 
@@ -18,13 +18,13 @@ The Ethereum ecosystem, by contrast, has accumulated significant developer capit
 
 1.2 The Core Insight
 
-TVA Protocol inverts the conventional approach to blockchain interoperability. Rather than asking developers to port their code or learn new paradigms, we bring the target execution environment to them. If Solidity source code can be compiled to Soroban WASM and EVM-format transactions can be faithfully translated to Stellar transactions, then the entire Ethereum developer ecosystem gains access to Stellar's settlement infrastructure without modification.
+mrkl inverts the conventional approach to blockchain interoperability. Rather than asking developers to port their code or learn new paradigms, we bring the target execution environment to them. If Solidity source code can be compiled to Soroban WASM and EVM-format transactions can be faithfully translated to Stellar transactions, then the entire Ethereum developer ecosystem gains access to Stellar's settlement infrastructure without modification.
 
 This insight leads to a compilation-based architecture rather than an interpretation-based one. The distinction is fundamental: interpretation requires running an EVM bytecode interpreter as a Soroban contract (incurring overhead and complexity), while compilation produces native Soroban WASM that executes at full VM efficiency.
 
 1.3 Why Not Another L2
 
-Existing EVM Layer 2 solutions (Optimism, Arbitrum, zkSync, Polygon zkEVM) settle back to Ethereum L1. They inherit Ethereum's economic model, are constrained by its data availability, cannot natively interact with non-Ethereum assets, and introduce bridge-based security assumptions. TVA Protocol is not a Layer 2. It is a compilation target and translation layer. Transactions are Stellar-native from the moment they enter the system: no rollup proofs, no challenge periods, no data availability committees.
+Existing EVM Layer 2 solutions (Optimism, Arbitrum, zkSync, Polygon zkEVM) settle back to Ethereum L1. They inherit Ethereum's economic model, are constrained by its data availability, cannot natively interact with non-Ethereum assets, and introduce bridge-based security assumptions. mrkl is not a Layer 2. It is a compilation target and translation layer. Transactions are Stellar-native from the moment they enter the system: no rollup proofs, no challenge periods, no data availability committees.
 
 
 2. Compilation Pipeline
@@ -91,7 +91,7 @@ Mappings: Solidity's `mapping(K => V)` type compiles to individual Soroban contr
 
 2.3 Current Compiler Constraints
 
-The current Solang Soroban target (version 5a48c04) has the following known limitations that TVA Protocol's compiler extensions will address:
+The current Solang Soroban target (version 5a48c04) has the following known limitations that mrkl's compiler extensions will address:
 
 - Event emission: The Soroban target has a `todo!()` stub for event codegen. Events are parsed but not emitted. This is a priority extension for TVA.
 - extendTtl scope: The `.extendTtl()` method only works on `uint64` persistent/temporary state variables, not on mapping values or other types.
@@ -100,7 +100,7 @@ The current Solang Soroban target (version 5a48c04) has the following known limi
 - No inline assembly: Soroban WASM does not support EVM assembly; alternative optimization patterns are needed.
 - No delegatecall: Soroban's execution model does not support execution in another contract's storage context.
 
-These constraints are engineering gaps in the compiler, not fundamental architectural limitations. TVA Protocol's roadmap includes addressing each through compiler extensions.
+These constraints are engineering gaps in the compiler, not fundamental architectural limitations. mrkl's roadmap includes addressing each through compiler extensions.
 
 
 3. RPC Translation Layer
@@ -230,7 +230,7 @@ The Soroban VM provides strong isolation:
 
 7.4 Trust Assumptions
 
-TVA Protocol inherits Stellar's trust model:
+mrkl inherits Stellar's trust model:
 - Stellar consensus is honest-majority (SCP quorum slice model)
 - Hash functions are collision-resistant
 - The Solang compiler produces semantically correct output (verified by tests)
@@ -253,7 +253,7 @@ Stylus allows WASM execution alongside EVM on Arbitrum. However, it targets Rust
 
 8.4 Unique Position
 
-TVA Protocol occupies a unique position: compilation to native execution (not interpretation) on a non-Ethereum settlement layer (not an L2) with deterministic finality (not probabilistic or challenged). No existing project occupies this exact niche.
+mrkl occupies a unique position: compilation to native execution (not interpretation) on a non-Ethereum settlement layer (not an L2) with deterministic finality (not probabilistic or challenged). No existing project occupies this exact niche.
 
 
 9. Token and Asset Integration
@@ -311,7 +311,7 @@ Stellar Network Parameters:
 
 12. Conclusion
 
-TVA Protocol represents a fundamentally different approach to blockchain interoperability. Rather than bridges, token wrapping, or bytecode interpretation, we compile. The Solidity developer's source code becomes native Soroban execution, settling on Stellar with deterministic finality.
+mrkl represents a fundamentally different approach to blockchain interoperability. Rather than bridges, token wrapping, or bytecode interpretation, we compile. The Solidity developer's source code becomes native Soroban execution, settling on Stellar with deterministic finality.
 
 The key contributions are:
 
