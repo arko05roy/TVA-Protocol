@@ -52,6 +52,8 @@ export interface SettlementExecutorConfig {
   signerKeypairs: Keypair[];
   /** Network configuration */
   networkConfig: NetworkConfig;
+  /** Skip Horizon check in replay protection (for testing) */
+  skipHorizonCheck?: boolean;
 }
 
 /**
@@ -71,7 +73,10 @@ export class SettlementExecutor {
     this.config = config;
     this.planner = new SettlementPlanner(config.networkConfig);
     this.orchestrator = new MultisigOrchestrator(config.networkConfig);
-    this.replayProtection = new ReplayProtectionService(config.networkConfig);
+    this.replayProtection = new ReplayProtectionService(
+      config.networkConfig,
+      config.skipHorizonCheck ?? false
+    );
     this.snapshotService = new TreasurySnapshotService(config.networkConfig);
   }
 
@@ -114,6 +119,9 @@ export class SettlementExecutor {
 
       // Step 2: Handle empty withdrawal queue
       if (withdrawals.length === 0) {
+        // Even for empty queues, record as confirmed to prevent duplicate processing
+        this.replayProtection.recordPendingSettlement(subnet_id, block_number);
+        this.replayProtection.recordConfirmedSettlement(subnet_id, block_number, [], []);
         return {
           status: 'confirmed',
           tx_hashes: [],

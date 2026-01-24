@@ -114,3 +114,33 @@ export {
   createFailureHandler,
   assertOrHalt,
 } from './safety/failure_handler';
+
+// =============================================================================
+// Integration (Phase 6)
+// =============================================================================
+export {
+  // Commitment Event Listener
+  ICommitmentEventSource,
+  MockCommitmentEventSource,
+  SorobanCommitmentEventSource,
+  createCommitmentEventSource,
+  // Withdrawal Queue Fetcher
+  IWithdrawalFetcher,
+  MockWithdrawalFetcher,
+  SorobanWithdrawalFetcher,
+  createWithdrawalFetcher,
+  createTestWithdrawal,
+  // Confirmation Sender
+  IConfirmationSender,
+  MockConfirmationSender,
+  HttpConfirmationSender,
+  FileConfirmationSender,
+  CompositeConfirmationSender,
+  createConfirmationSender,
+  // Integration Orchestrator
+  IntegrationConfig,
+  IntegrationStats,
+  IntegrationOrchestrator,
+  createTestnetOrchestrator as createTestnetIntegrationOrchestrator,
+  createProductionOrchestrator,
+} from './integration';

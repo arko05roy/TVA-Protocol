@@ -45,13 +45,19 @@ export interface SettlementRecord {
 export class ReplayProtectionService {
   private server: Horizon.Server;
   private config: NetworkConfig;
+  private skipHorizonCheck: boolean;
 
   /** In-memory settlement log (could be persisted to database) */
   private settlementLog: Map<string, SettlementRecord> = new Map();
 
-  constructor(config: NetworkConfig = TESTNET_CONFIG) {
+  /**
+   * @param config - Network configuration
+   * @param skipHorizonCheck - If true, only uses local cache (for testing)
+   */
+  constructor(config: NetworkConfig = TESTNET_CONFIG, skipHorizonCheck: boolean = false) {
     this.config = config;
     this.server = new Horizon.Server(config.horizonUrl);
+    this.skipHorizonCheck = skipHorizonCheck;
   }
 
   /**
@@ -84,6 +90,11 @@ export class ReplayProtectionService {
 
     if (localRecord && localRecord.status === 'confirmed') {
       return true;
+    }
+
+    // If skip Horizon check is enabled (for testing), only use local cache
+    if (this.skipHorizonCheck) {
+      return false;
     }
 
     // Check on-chain via Horizon
@@ -120,9 +131,12 @@ export class ReplayProtectionService {
       }
 
       return false;
-    } catch (error) {
-      // If we can't check Horizon, err on the side of caution
-      // Don't return false - could cause double settlement
+    } catch (error: any) {
+      // Handle 404 (account not found) gracefully - account may not exist yet
+      if (error?.response?.status === 404) {
+        return false;
+      }
+      // For other errors, err on the side of caution
       console.error('Failed to check settlement status on Horizon:', error);
       throw error;
     }
