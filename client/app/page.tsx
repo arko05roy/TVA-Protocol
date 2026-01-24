@@ -249,7 +249,7 @@ function Navbar() {
           <div className="w-9 h-9 rounded-lg bg-black flex items-center justify-center">
             <span className="text-white font-bold text-base font-mono">m</span>
           </div>
-          <span className="font-semibold text-xl tracking-tight">mrkl</span>
+          <span className="font-semibold text-xl tracking-tight">TVA Protocol</span>
         </div>
 
         <div className="hidden md:flex items-center gap-10">
@@ -317,7 +317,7 @@ function Hero() {
             transition={{ duration: 0.6, delay: 0.2 }}
             className="text-xl md:text-2xl text-[#3d3d3d] max-w-2xl leading-relaxed font-normal mb-10"
           >
-            Write Solidity like you always have. mrkl compiles it to Stellar&apos;s
+            Write Solidity like you always have. TVA Protocol compiles it to Stellar&apos;s
             Soroban—parallel execution with 5-second deterministic finality.
           </motion.p>
 
@@ -358,7 +358,7 @@ function Hero() {
             <div className="absolute top-6 left-8 z-20">
               <div className="flex items-center gap-2 text-sm font-mono text-black/40">
                 <svg className="w-4 h-4" viewBox="0 0 24 24" fill="currentColor">
-                  <path d="M12 1.5l-9 5.25v10.5l9 5.25 9-5.25V6.75L12 1.5zm0 2.25l6.75 3.9375L12 11.625 5.25 7.6875 12 3.75zm-7.5 5.4375l6.75 3.9375v7.875l-6.75-3.9375V9.1875zm15 0v7.875l-6.75 3.9375v-7.875l6.75-3.9375z"/>
+                  <path d="M12 1.5l-9 5.25v10.5l9 5.25 9-5.25V6.75L12 1.5zm0 2.25l6.75 3.9375L12 11.625 5.25 7.6875 12 3.75zm-7.5 5.4375l6.75 3.9375v7.875l-6.75-3.9375V9.1875zm15 0v7.875l-6.75 3.9375v-7.875l6.75-3.9375z" />
                 </svg>
                 <span>Solidity</span>
               </div>
@@ -367,8 +367,8 @@ function Hero() {
               <div className="flex items-center gap-2 text-sm font-mono text-[#0055ff]">
                 <span>Stellar</span>
                 <svg className="w-4 h-4" viewBox="0 0 24 24" fill="currentColor">
-                  <circle cx="12" cy="12" r="3"/>
-                  <path d="M12 2v4m0 12v4m10-10h-4M6 12H2m15.07-7.07l-2.83 2.83M9.76 14.24l-2.83 2.83m0-10.14l2.83 2.83m4.48 4.48l2.83 2.83"/>
+                  <circle cx="12" cy="12" r="3" />
+                  <path d="M12 2v4m0 12v4m10-10h-4M6 12H2m15.07-7.07l-2.83 2.83M9.76 14.24l-2.83 2.83m0-10.14l2.83 2.83m4.48 4.48l2.83 2.83" />
                 </svg>
               </div>
             </div>
@@ -544,7 +544,7 @@ contract Counter {
       num: "02",
       title: "Compile to WASM",
       desc: "Solang compiles your Solidity directly to Soroban-compatible WebAssembly. No bytecode interpretation. Native speed.",
-      code: `$ mrkl compile Counter.sol
+      code: `$ TVA Protocol compile Counter.sol
 
 Compiling Counter.sol...
   ✓ Parsed source
@@ -559,7 +559,7 @@ Output:
       num: "03",
       title: "Deploy & Settle",
       desc: "Deploy to Stellar. 5-second deterministic finality via SCP consensus. No challenge periods, no rollbacks possible.",
-      code: `$ mrkl deploy Counter --network stellar
+      code: `$ TVA Protocol deploy Counter --network stellar
 
 Deploying to Stellar...
   Contract: CDLZ...K4WE
@@ -638,12 +638,12 @@ function Comparison() {
   const isInView = useInView(ref, { once: true, margin: "-100px" });
 
   const data = [
-    { prop: "Finality", eth: "~12 min", l2: "7 days*", mrkl: "5 seconds" },
-    { prop: "Transaction Fee", eth: "$0.50–50", l2: "$0.01–0.10", mrkl: "~$0.00001" },
-    { prop: "MEV Exposure", eth: "High", l2: "Medium", mrkl: "None" },
-    { prop: "Execution", eth: "EVM bytecode", l2: "EVM bytecode", mrkl: "Native WASM" },
-    { prop: "Bridge Risk", eth: "N/A", l2: "Required", mrkl: "None" },
-    { prop: "Asset Support", eth: "ETH + ERC20", l2: "ETH + ERC20", mrkl: "Multi-asset native" },
+    { prop: "Finality", eth: "~12 min", l2: "7 days*", TVA Protocol: "5 seconds" },
+    { prop: "Transaction Fee", eth: "$0.50–50", l2: "$0.01–0.10", TVA Protocol: "~$0.00001" },
+    { prop: "MEV Exposure", eth: "High", l2: "Medium", TVA Protocol: "None" },
+    { prop: "Execution", eth: "EVM bytecode", l2: "EVM bytecode", TVA Protocol: "Native WASM" },
+    { prop: "Bridge Risk", eth: "N/A", l2: "Required", TVA Protocol: "None" },
+    { prop: "Asset Support", eth: "ETH + ERC20", l2: "ETH + ERC20", TVA Protocol: "Multi-asset native" },
   ];
 
   return (
@@ -664,7 +664,7 @@ function Comparison() {
             <span className="text-[#999]">A different chain entirely.</span>
           </h2>
           <p className="text-xl text-[#3d3d3d]">
-            L2s settle back to Ethereum. mrkl settles on Stellar—a fundamentally different architecture with different tradeoffs.
+            L2s settle back to Ethereum. TVA Protocol settles on Stellar—a fundamentally different architecture with different tradeoffs.
           </p>
         </motion.div>
 
@@ -686,7 +686,7 @@ function Comparison() {
               Rollup L2s
             </div>
             <div className="p-5 md:p-6 font-bold text-[#0055ff] text-xs md:text-sm uppercase tracking-wider text-center bg-[#0055ff]/5">
-              mrkl
+              TVA Protocol
             </div>
           </div>
 
@@ -701,7 +701,7 @@ function Comparison() {
               <div className="p-5 md:p-6 font-semibold text-sm md:text-[15px]">{row.prop}</div>
               <div className="p-5 md:p-6 text-[#666] text-center text-sm md:text-[15px]">{row.eth}</div>
               <div className="p-5 md:p-6 text-[#666] text-center text-sm md:text-[15px]">{row.l2}</div>
-              <div className="p-5 md:p-6 text-black font-semibold text-center text-sm md:text-[15px] bg-[#0055ff]/5">{row.mrkl}</div>
+              <div className="p-5 md:p-6 text-black font-semibold text-center text-sm md:text-[15px] bg-[#0055ff]/5">{row.TVA Protocol}</div>
             </motion.div>
           ))}
         </motion.div>
@@ -784,7 +784,7 @@ function Developers() {
               <code>
                 <span className="text-[#c792ea]">require</span>
                 <span className="text-[#89ddff]">(</span>
-                <span className="text-[#c3e88d]">&quot;@mrkl/hardhat-plugin&quot;</span>
+                <span className="text-[#c3e88d]">&quot;@TVA Protocol/hardhat-plugin&quot;</span>
                 <span className="text-[#89ddff]">);</span>
                 {"\n\n"}
                 <span className="text-[#82aaff]">module</span>
@@ -795,12 +795,12 @@ function Developers() {
                 <span className="text-[#f78c6c]">  networks</span>
                 <span className="text-[#89ddff]">: {"{"}</span>
                 {"\n"}
-                <span className="text-[#f78c6c]">    mrkl</span>
+                <span className="text-[#f78c6c]">    TVA Protocol</span>
                 <span className="text-[#89ddff]">: {"{"}</span>
                 {"\n"}
                 <span className="text-[#f78c6c]">      url</span>
                 <span className="text-[#89ddff]">: </span>
-                <span className="text-[#c3e88d]">&quot;https://rpc.mrkl.dev&quot;</span>
+                <span className="text-[#c3e88d]">&quot;https://rpc.TVA Protocol.dev&quot;</span>
                 <span className="text-[#89ddff]">,</span>
                 {"\n"}
                 <span className="text-[#f78c6c]">      chainId</span>
@@ -871,17 +871,17 @@ function CTA() {
             <div className="code-block !bg-white/5 !border-white/10">
               <pre className="text-sm font-mono leading-relaxed">
                 <code>
-                  <span className="text-white/40"># Install mrkl CLI</span>
+                  <span className="text-white/40"># Install TVA Protocol CLI</span>
                   {"\n"}
-                  <span className="text-[#0055ff]">$</span> <span className="text-white/80">npm install -g @mrkl/cli</span>
+                  <span className="text-[#0055ff]">$</span> <span className="text-white/80">npm install -g @TVA Protocol/cli</span>
                   {"\n\n"}
                   <span className="text-white/40"># Compile your Solidity</span>
                   {"\n"}
-                  <span className="text-[#0055ff]">$</span> <span className="text-white/80">mrkl compile contracts/</span>
+                  <span className="text-[#0055ff]">$</span> <span className="text-white/80">TVA Protocol compile contracts/</span>
                   {"\n\n"}
                   <span className="text-white/40"># Deploy to Stellar</span>
                   {"\n"}
-                  <span className="text-[#0055ff]">$</span> <span className="text-white/80">mrkl deploy --network stellar</span>
+                  <span className="text-[#0055ff]">$</span> <span className="text-white/80">TVA Protocol deploy --network stellar</span>
                   {"\n\n"}
                   <span className="text-white/40"># That&apos;s it. You&apos;re live.</span>
                 </code>
@@ -903,7 +903,7 @@ function Footer() {
             <div className="w-8 h-8 rounded-lg bg-black flex items-center justify-center">
               <span className="text-white font-bold text-sm font-mono">m</span>
             </div>
-            <span className="font-semibold text-black">mrkl</span>
+            <span className="font-semibold text-black">TVA Protocol</span>
           </div>
 
           <div className="flex flex-wrap items-center gap-8">

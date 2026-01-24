@@ -1,8 +1,8 @@
-# mrkl: EVM Compatibility Layer on Stellar
+# TVA Protocol: EVM Compatibility Layer on Stellar
 
 ## Executive Summary
 
-mrkl is an EVM compatibility layer that enables developers to write standard Solidity smart contracts and deploy them to Stellar's Soroban smart contract platform. The core pipeline leverages the Solang compiler to translate Solidity source code into Soroban-compatible WebAssembly, while an EVM-compatible RPC layer translates Ethereum-format transactions into Stellar transactions that settle on Stellar's network via the Stellar Consensus Protocol (SCP).
+TVA Protocol is an EVM compatibility layer that enables developers to write standard Solidity smart contracts and deploy them to Stellar's Soroban smart contract platform. The core pipeline leverages the Solang compiler to translate Solidity source code into Soroban-compatible WebAssembly, while an EVM-compatible RPC layer translates Ethereum-format transactions into Stellar transactions that settle on Stellar's network via the Stellar Consensus Protocol (SCP).
 
 The result: developers use familiar Ethereum tooling (Hardhat, Foundry, MetaMask, ethers.js) but their contracts execute and settle on Stellar -- inheriting Stellar's 5-second finality, low fees, and built-in asset infrastructure.
 
@@ -52,11 +52,11 @@ Existing EVM L2s (Optimism, Arbitrum, zkSync) all settle back to Ethereum L1. Th
 - They cannot natively interact with non-Ethereum assets
 - Cross-chain bridging introduces security risks
 
-mrkl is not an L2 -- it is a compilation target. The EVM is used purely as a developer-facing interface. Settlement happens on Stellar, a fundamentally different (and in many ways superior) settlement layer.
+TVA Protocol is not an L2 -- it is a compilation target. The EVM is used purely as a developer-facing interface. Settlement happens on Stellar, a fundamentally different (and in many ways superior) settlement layer.
 
 ### 1.5 Prior Art: Solang
 
-The Solang compiler (maintained by Hyperledger) already compiles Solidity to multiple targets including Soroban. mrkl builds on this foundation rather than creating a new compiler from scratch. Our contribution is the surrounding infrastructure: the RPC translation layer, transaction format conversion, developer tooling, and deployment pipeline.
+The Solang compiler (maintained by Hyperledger) already compiles Solidity to multiple targets including Soroban. TVA Protocol builds on this foundation rather than creating a new compiler from scratch. Our contribution is the surrounding infrastructure: the RPC translation layer, transaction format conversion, developer tooling, and deployment pipeline.
 
 ---
 
@@ -79,7 +79,7 @@ The Solang compiler (maintained by Hyperledger) already compiles Solidity to mul
 ### 2.2 Component Breakdown
 
 ```
-mrkl Stack
+TVA Protocol Stack
 |
 +-- Developer Layer (unchanged Ethereum UX)
 |   +-- Solidity source code
@@ -234,7 +234,7 @@ These are the key semantic translations that Solang performs:
 
 ### 3.4 TVA-Specific Compiler Extensions
 
-Beyond stock Solang, mrkl adds:
+Beyond stock Solang, TVA Protocol adds:
 
 1. **Automatic Storage Type Inference**: Analyze variable usage patterns to automatically assign `temporary`, `instance`, or `persistent` storage types without developer annotation.
 
@@ -487,7 +487,7 @@ contract AccountRegistry {
 ```json
 {
   "chainId": "0x<TVA_CHAIN_ID>",
-  "chainName": "mrkl (Stellar)",
+  "chainName": "TVA Protocol (Stellar)",
   "nativeCurrency": {
     "name": "Stellar Lumens",
     "symbol": "XLM",
@@ -823,7 +823,7 @@ const count = await counter.get(); // 1n
 
 ### 12.1 vs. Neon EVM (Solana)
 
-| Aspect | Neon EVM | mrkl |
+| Aspect | Neon EVM | TVA Protocol |
 |--------|----------|--------------|
 | Target chain | Solana | Stellar |
 | Approach | Full EVM in a program | Compilation to native |
@@ -834,7 +834,7 @@ const count = await counter.get(); // 1n
 
 ### 12.2 vs. Aurora (NEAR)
 
-| Aspect | Aurora | mrkl |
+| Aspect | Aurora | TVA Protocol |
 |--------|--------|--------------|
 | Target chain | NEAR | Stellar |
 | Approach | EVM runtime contract | Compilation to native |
@@ -844,7 +844,7 @@ const count = await counter.get(); // 1n
 
 ### 12.3 vs. Stylus (Arbitrum)
 
-| Aspect | Stylus | mrkl |
+| Aspect | Stylus | TVA Protocol |
 |--------|--------|--------------|
 | Settlement | Ethereum L1 | Stellar |
 | Approach | WASM coprocessor | WASM-native |
@@ -852,7 +852,7 @@ const count = await counter.get(); // 1n
 | Finality | 7-day challenge period | 5 seconds |
 | Fees | ETH-denominated | XLM-denominated |
 
-mrkl's key differentiator: **compilation to native** (not interpretation) on a **non-Ethereum settlement layer** with **deterministic finality**.
+TVA Protocol's key differentiator: **compilation to native** (not interpretation) on a **non-Ethereum settlement layer** with **deterministic finality**.
 
 ---
 
@@ -1032,7 +1032,7 @@ TVA-Protocol/
 
 ## 16. Conclusion
 
-mrkl represents a fundamentally different approach to blockchain interoperability. Rather than building bridges, wrapping tokens, or running EVM interpreters, we compile. The Solidity developer's code becomes native Soroban execution, settling on Stellar with deterministic finality.
+TVA Protocol represents a fundamentally different approach to blockchain interoperability. Rather than building bridges, wrapping tokens, or running EVM interpreters, we compile. The Solidity developer's code becomes native Soroban execution, settling on Stellar with deterministic finality.
 
 The key innovations are:
 

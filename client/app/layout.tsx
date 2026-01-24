@@ -15,7 +15,7 @@ const ibmPlexMono = IBM_Plex_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "mrkl | EVM on Stellar",
+  title: "TVA Protocol | EVM on Stellar",
   description: "Compile Solidity. Settle on Stellar. 5-second finality, near-zero fees. The EVM compatibility layer that compiles, not interprets.",
 };
 

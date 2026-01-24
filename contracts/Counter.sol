@@ -2,7 +2,7 @@ pragma solidity 0;
 
 /**
  * @title Counter
- * @notice Basic counter contract demonstrating mrkl compilation pipeline.
+ * @notice Basic counter contract demonstrating TVA Protocol compilation pipeline.
  *         Showcases persistent/instance storage, requireAuth, and TTL management.
  * @dev Compiles to Soroban WASM via: solang compile Counter.sol --target soroban
  *

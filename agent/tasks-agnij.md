@@ -1,4 +1,4 @@
-# mrkl -- Tasks: Agnij (Protocol Architect / Systems Dev)
+# TVA Protocol -- Tasks: Agnij (Protocol Architect / Systems Dev)
 
 Role: Core infrastructure, compiler extensions, RPC translation engine, testing, CI/CD, performance.
 
@@ -150,7 +150,7 @@ Role: Core infrastructure, compiler extensions, RPC translation engine, testing,
 ### A-11: CI/CD Pipeline
 - **Priority:** P1
 - **Phase:** 2
-- **Description:** Set up comprehensive CI/CD for the entire mrkl monorepo. Includes Solang build verification, contract compilation checks, RPC unit tests, integration tests, and deployment automation.
+- **Description:** Set up comprehensive CI/CD for the entire TVA Protocol monorepo. Includes Solang build verification, contract compilation checks, RPC unit tests, integration tests, and deployment automation.
 - **Deliverables:**
   - GitHub Actions workflow: build Solang from source (cached)
   - Workflow: compile all contracts, verify WASM output
