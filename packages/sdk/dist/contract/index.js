@@ -6,15 +6,16 @@ var sha3 = require('@noble/hashes/sha3');
 // src/contract/contract.ts
 
 // src/types/index.ts
+var TVA_CHAIN_ID = 1414676736;
 var NETWORKS = {
   testnet: {
     type: "testnet",
-    rpcUrl: "https://rpc.testnet.tva-protocol.io",
+    rpcUrl: "http://localhost:8545",
+    // TVA RPC server
     horizonUrl: "https://horizon-testnet.stellar.org",
     sorobanRpcUrl: "https://soroban-testnet.stellar.org",
     networkPassphrase: "Test SDF Network ; September 2015",
-    chainId: 5522753,
-    // "TVA" in hex (test)
+    chainId: TVA_CHAIN_ID,
     nativeCurrency: {
       name: "Stellar Lumens",
       symbol: "XLM",
@@ -23,12 +24,12 @@ var NETWORKS = {
   },
   mainnet: {
     type: "mainnet",
-    rpcUrl: "https://rpc.tva-protocol.io",
+    rpcUrl: "http://localhost:8545",
+    // TVA RPC server (production URL TBD)
     horizonUrl: "https://horizon.stellar.org",
     sorobanRpcUrl: "https://soroban.stellar.org",
     networkPassphrase: "Public Global Stellar Network ; September 2015",
-    chainId: 5527105,
-    // "TVA" in hex
+    chainId: TVA_CHAIN_ID,
     nativeCurrency: {
       name: "Stellar Lumens",
       symbol: "XLM",
@@ -41,8 +42,7 @@ var NETWORKS = {
     horizonUrl: "http://localhost:8000",
     sorobanRpcUrl: "http://localhost:8001",
     networkPassphrase: "Standalone Network ; February 2017",
-    chainId: 5527040,
-    // "TV" + 0x00
+    chainId: TVA_CHAIN_ID,
     nativeCurrency: {
       name: "Stellar Lumens",
       symbol: "XLM",

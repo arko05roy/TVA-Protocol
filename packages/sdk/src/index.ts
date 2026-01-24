@@ -10,6 +10,9 @@
 // Types
 export * from './types/index.js';
 
+// RPC Client (JSON-RPC communication)
+export * from './rpc/index.js';
+
 // Wallet (Key management and signing)
 export * from './wallet/index.js';
 

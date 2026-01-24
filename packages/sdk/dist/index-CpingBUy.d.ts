@@ -25,6 +25,10 @@ interface NetworkConfig {
         decimals: number;
     };
 }
+/**
+ * TVA Chain ID: "TVA\0" = 0x54564100 = 1414676736
+ */
+declare const TVA_CHAIN_ID = 1414676736;
 declare const NETWORKS: Record<NetworkType, NetworkConfig>;
 /** 20-byte EVM-compatible address (hex string with 0x prefix) */
 type EvmAddress = `0x${string}`;
@@ -301,4 +305,4 @@ declare enum TVAErrorCode {
     RESTORATION_FAILED = 6003
 }
 
-export { type ABIError as A, type Balance as B, type CompilerInput as C, type DeploymentConfig as D, type EvmAddress as E, type KeyPair as K, NETWORKS as N, type ScValType as S, TVAError as T, type ABIEvent as a, type ABIEventParameter as b, type ABIFunction as c, type ABIParameter as d, type Account as e, type Address as f, type AddressMapping as g, type CompilerOutput as h, type ContractABI as i, type ContractCallConfig as j, type ContractCallResult as k, type DeploymentResult as l, type EvmBlock as m, type EvmLog as n, type EvmTransaction as o, type EvmTransactionReceipt as p, type NetworkConfig as q, type NetworkType as r, type SorobanContractId as s, type SorobanSpec as t, type StellarAddress as u, type StorageEntry as v, type StorageType as w, TVAErrorCode as x, type TokenBalance as y };
+export { type ABIError as A, type Balance as B, type CompilerInput as C, type DeploymentConfig as D, type EvmAddress as E, type KeyPair as K, NETWORKS as N, type ScValType as S, TVAError as T, type ABIEvent as a, type ABIEventParameter as b, type ABIFunction as c, type ABIParameter as d, type Account as e, type Address as f, type AddressMapping as g, type CompilerOutput as h, type ContractABI as i, type ContractCallConfig as j, type ContractCallResult as k, type DeploymentResult as l, type EvmBlock as m, type EvmLog as n, type EvmTransaction as o, type EvmTransactionReceipt as p, type NetworkConfig as q, type NetworkType as r, type SorobanContractId as s, type SorobanSpec as t, type StellarAddress as u, type StorageEntry as v, type StorageType as w, TVAErrorCode as x, TVA_CHAIN_ID as y, type TokenBalance as z };

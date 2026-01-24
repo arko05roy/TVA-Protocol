@@ -32,14 +32,19 @@ export interface NetworkConfig {
   };
 }
 
+/**
+ * TVA Chain ID: "TVA\0" = 0x54564100 = 1414676736
+ */
+export const TVA_CHAIN_ID = 1414676736;
+
 export const NETWORKS: Record<NetworkType, NetworkConfig> = {
   testnet: {
     type: 'testnet',
-    rpcUrl: 'https://rpc.testnet.tva-protocol.io',
+    rpcUrl: 'http://localhost:8545', // TVA RPC server
     horizonUrl: 'https://horizon-testnet.stellar.org',
     sorobanRpcUrl: 'https://soroban-testnet.stellar.org',
     networkPassphrase: 'Test SDF Network ; September 2015',
-    chainId: 0x544541, // "TVA" in hex (test)
+    chainId: TVA_CHAIN_ID,
     nativeCurrency: {
       name: 'Stellar Lumens',
       symbol: 'XLM',
@@ -48,11 +53,11 @@ export const NETWORKS: Record<NetworkType, NetworkConfig> = {
   },
   mainnet: {
     type: 'mainnet',
-    rpcUrl: 'https://rpc.tva-protocol.io',
+    rpcUrl: 'http://localhost:8545', // TVA RPC server (production URL TBD)
     horizonUrl: 'https://horizon.stellar.org',
     sorobanRpcUrl: 'https://soroban.stellar.org',
     networkPassphrase: 'Public Global Stellar Network ; September 2015',
-    chainId: 0x545641, // "TVA" in hex
+    chainId: TVA_CHAIN_ID,
     nativeCurrency: {
       name: 'Stellar Lumens',
       symbol: 'XLM',
@@ -65,7 +70,7 @@ export const NETWORKS: Record<NetworkType, NetworkConfig> = {
     horizonUrl: 'http://localhost:8000',
     sorobanRpcUrl: 'http://localhost:8001',
     networkPassphrase: 'Standalone Network ; February 2017',
-    chainId: 0x545600, // "TV" + 0x00
+    chainId: TVA_CHAIN_ID,
     nativeCurrency: {
       name: 'Stellar Lumens',
       symbol: 'XLM',

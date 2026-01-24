@@ -1,0 +1,59 @@
+{
+  "name": "@tva-protocol/ethers-adapter",
+  "version": "0.1.0",
+  "description": "ethers.js v6 adapter for TVA Protocol - use familiar Ethereum patterns with Stellar/Soroban",
+  "main": "dist/index.js",
+  "module": "dist/index.mjs",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "import": "./dist/index.mjs",
+      "require": "./dist/index.js",
+      "types": "./dist/index.d.ts"
+    }
+  },
+  "scripts": {
+    "build": "tsup",
+    "dev": "tsup --watch",
+    "test": "vitest",
+    "lint": "eslint src/",
+    "typecheck": "tsc --noEmit",
+    "clean": "rm -rf dist"
+  },
+  "dependencies": {
+    "@tva-protocol/sdk": "workspace:*",
+    "ethers": "^6.13.4"
+  },
+  "peerDependencies": {
+    "ethers": "^6.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "typescript": "^5.7.2",
+    "tsup": "^8.3.5",
+    "vitest": "^2.1.8",
+    "eslint": "^9.16.0"
+  },
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "keywords": [
+    "tva",
+    "ethers",
+    "ethereum",
+    "stellar",
+    "soroban",
+    "web3",
+    "adapter"
+  ],
+  "author": "TVA Protocol",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/tva-protocol/tva"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}
