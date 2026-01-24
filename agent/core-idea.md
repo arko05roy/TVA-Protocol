@@ -1,328 +1,490 @@
-TVA Protocol
-An EVM Compatibility Layer on Stellar via Compilation-Based Translation
+# TVA Protocol -- An EVM Compatibility Layer for Stellar via Solang Compilation
 
-Abstract
+**Version 3.0 -- January 2026**
+**Status: Active Development (Phase 1 Complete)**
 
-TVA Protocol is an EVM compatibility layer that enables developers to write standard Solidity smart contracts and deploy them natively to Stellar's Soroban smart contract platform. Rather than interpreting EVM bytecode within a runtime environment, TVA compiles Solidity source code through the Solang compiler's LLVM-based pipeline to produce Soroban-compatible WebAssembly modules. A complementary RPC translation layer converts Ethereum JSON-RPC calls into Stellar/Soroban API calls, enabling unmodified EVM tooling (Hardhat, Foundry, ethers.js, MetaMask) to interact with contracts settled on Stellar.
+---
 
-The result is a system where developers retain their existing Solidity workflow and toolchain while inheriting Stellar's 5-second deterministic finality, sub-cent transaction fees, and native multi-asset infrastructure. This paper formalizes the architecture, details the compilation pipeline, specifies the translation layer, analyzes the security model, and positions TVA relative to existing EVM compatibility solutions.
+## Abstract
 
+The Ethereum Virtual Machine (EVM) ecosystem represents the largest concentration of smart contract developer capital, tooling, and deployed protocol logic in the blockchain industry. Stellar, through its Soroban smart contract platform, provides settlement properties unmatched by EVM-native chains: deterministic 5-second finality via the Stellar Consensus Protocol (SCP), sub-cent transaction fees, resource-based metering, and native multi-asset infrastructure. TVA Protocol bridges this divide through a compilation-based architecture: the Solang compiler translates standard Solidity source code directly to Soroban-compatible WebAssembly, while a stateless RPC translation layer renders Stellar indistinguishable from an EVM chain to existing developer tooling (Hardhat, Foundry, ethers.js, MetaMask). The result is a system that requires no new trust assumptions beyond compiler correctness, introduces no interpretation overhead, and preserves the full security guarantees of the Soroban VM sandbox.
 
-1. Introduction
+---
 
-1.1 The Developer Adoption Problem
+## 1. Motivation
 
-Stellar's Soroban smart contract platform provides a technically sound execution environment: sandboxed WebAssembly execution, resource-based fee metering, and deterministic finality via the Stellar Consensus Protocol (SCP). However, developer adoption remains constrained by ecosystem friction. Soroban's primary language is Rust, its tooling ecosystem is nascent relative to Ethereum's decade of maturity, and developers must learn novel paradigms including state archival, TTL management, and the ScVal-based host-guest architecture.
+### 1.1 The EVM Developer Ecosystem
 
-The Ethereum ecosystem, by contrast, has accumulated significant developer capital: hundreds of thousands of Solidity developers, battle-tested DeFi protocol implementations (Uniswap, Aave, Compound), mature development frameworks (Hardhat, Foundry), comprehensive security tooling (Slither, Mythril, Echidna), and established token standards (ERC20, ERC721, ERC1155, ERC4626).
+The Ethereum ecosystem has accumulated over a decade of developer capital: hundreds of thousands of Solidity developers, mature frameworks (Hardhat, Foundry), client libraries (ethers.js, viem), security tooling (Slither, Mythril, Echidna, Certora), composable token standards (ERC-20, ERC-721, ERC-1155, ERC-4626), and battle-tested DeFi protocols (Uniswap, Aave, Compound, Curve) representing billions in total value locked. This ecosystem constitutes a network effect that no alternative smart contract platform has replicated.
 
-1.2 The Core Insight
+### 1.2 Stellar's Settlement Properties
 
-TVA Protocol inverts the conventional approach to blockchain interoperability. Rather than asking developers to port their code or learn new paradigms, we bring the target execution environment to them. If Solidity source code can be compiled to Soroban WASM and EVM-format transactions can be faithfully translated to Stellar transactions, then the entire Ethereum developer ecosystem gains access to Stellar's settlement infrastructure without modification.
+Stellar provides settlement characteristics unmatched by EVM-native chains:
 
-This insight leads to a compilation-based architecture rather than an interpretation-based one. The distinction is fundamental: interpretation requires running an EVM bytecode interpreter as a Soroban contract (incurring overhead and complexity), while compilation produces native Soroban WASM that executes at full VM efficiency.
+| Property | Ethereum L1 | Optimistic L2 | ZK L2 | Stellar (SCP) |
+|----------|-------------|---------------|--------|----------------|
+| Finality | ~12 min (probabilistic) | 7-day challenge | Hours (proof gen) | 5 sec (deterministic) |
+| Tx Cost | $0.50 - $50+ | $0.01 - $1 | $0.01 - $0.50 | < $0.001 |
+| MEV Exposure | High | Moderate | Low | None |
+| Native Assets | ETH only | ETH only | ETH only | Multi-asset |
+| Reorg Risk | Non-zero | Inherited | Inherited | Zero |
 
-1.3 Why Not Another L2
+Soroban provides sandboxed WASM execution with resource metering, state isolation, and no reentrancy by default. However, developer adoption remains constrained: Soroban requires Rust, its tooling is nascent, and developers must master state archival, TTL management, and the ScVal host-guest interface.
 
-Existing EVM Layer 2 solutions (Optimism, Arbitrum, zkSync, Polygon zkEVM) settle back to Ethereum L1. They inherit Ethereum's economic model, are constrained by its data availability, cannot natively interact with non-Ethereum assets, and introduce bridge-based security assumptions. TVA Protocol is not a Layer 2. It is a compilation target and translation layer. Transactions are Stellar-native from the moment they enter the system: no rollup proofs, no challenge periods, no data availability committees.
+### 1.3 The Limitations of Current Approaches
 
+**Interpretation-based** (Neon EVM on Solana, Aurora on NEAR): deploy full EVM bytecode interpreters as smart contracts, introducing interpretation overhead, large attack surfaces, gas translation complexity, and storage inefficiency.
 
-2. Compilation Pipeline
+**Layer 2** (Optimism, Arbitrum, zkSync): settle back to Ethereum L1, inheriting its economics, requiring bridge-based security assumptions, and introducing challenge periods or proof delays.
 
-2.1 Architecture
+### 1.4 The Gap
 
-The compilation pipeline leverages the Solang compiler, an LLVM-based Solidity compiler originally developed under Hyperledger that targets multiple blockchain platforms including Soroban. The pipeline is structured as follows:
+No existing system enables EVM developers to deploy to Stellar without learning Soroban or Rust. The gap is not execution capability but developer interface compatibility.
 
-    Solidity Source (.sol)
-            |
-            v
-    [Solang Frontend]
-    - Lexer/Parser (solang-parser)
-    - Semantic Analysis
-    - Type Checking and Resolution
-    - AST Construction
-            |
-            v
-    [Codegen Phase]
-    - Control Flow Graph (CFG) generation
-    - Soroban-specific dispatch (function export wrappers)
-    - Soroban encoding (ScVal serialization)
-    - Host function mapping
-            |
-            v
-    [LLVM IR Emission]
-    - LLVM 16 module construction
-    - TargetRuntime implementation for Soroban
-    - Storage operations via Soroban host functions
-    - ScVal encoding for all values
-            |
-            v
-    [LLVM Backend]
-    - Optimization passes (O2/O3)
-    - WebAssembly target (wasm32-unknown-unknown)
-    - Object file generation
-            |
-            v
-    [Soroban Linker]
-    - wasm-ld linking
-    - Import section rewriting (host function resolution)
-    - Memory configuration (1 MiB initial)
-            |
-            v
-    [Output]
-    - .wasm file (Soroban-compatible WebAssembly)
-    - Contract spec metadata (ScSpecEntry per public function)
+### 1.5 TVA's Insight
 
-2.2 Semantic Translation Rules
+Compile Solidity to Soroban's native format rather than interpreting EVM bytecode on-chain.
 
-The compiler performs the following key translations between EVM and Soroban semantics:
+---
 
-Storage Model: EVM's flat 256-bit slot-addressed storage maps to Soroban's typed contract data entries. Soroban distinguishes three storage classes -- temporary (deleted after invocation), instance (lives with contract instance), and persistent (durable, TTL-managed). The Solang Soroban target supports explicit annotation of storage types via the `persistent`, `instance`, and `temporary` keywords on state variables.
+## 2. Core Insight: Compilation over Emulation
 
-Function Dispatch: EVM uses 4-byte keccak256 selectors with ABI-encoded calldata. Soroban uses named WASM function exports. The compiler generates wrapper CFGs for each public function that decode ScVal arguments from the Soroban host, call the actual function logic, and encode return values back to ScVal.
+### 2.1 The Semantic Equivalence Argument
 
-Value Encoding: EVM's ABI encoding (padded 32-byte slots) translates to Soroban's ScVal tagged 64-bit values. Small integers are tagged inline; large values use host object references; strings and byte arrays use linear memory with host function calls.
+Let S denote a Solidity program, E(S) the EVM bytecode from solc, and W(S) the Soroban WASM from Solang. The correctness property:
 
-Authorization: EVM relies on `msg.sender` for caller identification. Soroban has no equivalent -- instead, it uses `requireAuth()` calls on address values, where the address holder must have pre-authorized the invocation. Contracts must be written with explicit `address.requireAuth()` patterns rather than implicit sender checks.
+    For all S, sigma, tx:
+    exec_EVM(E(S), sigma, tx) ~ exec_Soroban(W(S), T_state(sigma), T_tx(tx))
 
-Integer Types: EVM uses arbitrary-width integers (uint8 through uint256). Soroban's Solang target rounds integer widths to 32, 64, or 128 bits. The semantic behavior is preserved but storage efficiency differs.
+where ~ denotes observational equivalence (identical return values and state transitions modulo encoding). This holds iff: (1) Solang correctly preserves Solidity semantics, and (2) the translation functions T_state, T_tx faithfully map between domains.
 
-Mappings: Solidity's `mapping(K => V)` type compiles to individual Soroban contract data entries with composite keys. Each mapping access becomes a separate host function call for storage read/write.
+### 2.2 TCB Reduction
 
-2.3 Current Compiler Constraints
+    Emulation: S -> solc -> EVM bytecode -> EVM interpreter (on-chain) -> execution
+    Compilation: S -> Solang -> Soroban WASM -> Soroban VM -> execution
 
-The current Solang Soroban target (version 5a48c04) has the following known limitations that TVA Protocol's compiler extensions will address:
+    TCB_emulation = {solc, EVM_interpreter_contract, target_VM}
+    TCB_compilation = {Solang, target_VM}
 
-- Event emission: The Soroban target has a `todo!()` stub for event codegen. Events are parsed but not emitted. This is a priority extension for TVA.
-- extendTtl scope: The `.extendTtl()` method only works on `uint64` persistent/temporary state variables, not on mapping values or other types.
-- Mapping key types: Only `address` and integer types are fully supported as mapping keys. Fixed-byte types (`bytes20`, `bytes32`) cause encoder panics.
-- Integer type support: `extendTtl()` is restricted to `uint64` variables; `int128` and other widths do not support this method.
-- No inline assembly: Soroban WASM does not support EVM assembly; alternative optimization patterns are needed.
-- No delegatecall: Soroban's execution model does not support execution in another contract's storage context.
+Since the target VM is trusted in both cases, compilation strictly reduces the Trusted Computing Base. The compiler is an off-chain artifact subject to exhaustive testing; the interpreter is on-chain code in the critical path.
 
-These constraints are engineering gaps in the compiler, not fundamental architectural limitations. TVA Protocol's roadmap includes addressing each through compiler extensions.
+### 2.3 Security Model Preservation
 
+Compiled WASM preserves full Soroban VM guarantees: sandboxing (no escape from VM boundary), resource metering (identical to native contracts, no inner/outer gas), state isolation (independent storage namespaces), and reentrancy prevention (by design, no explicit guards needed). Emulation must re-implement all guarantees within the interpreter contract.
 
-3. RPC Translation Layer
+---
 
-3.1 Design
+## 3. System Architecture
 
-The TVA RPC layer is a stateless translation server that accepts Ethereum JSON-RPC requests and translates them into corresponding Stellar/Soroban API calls. It implements the standard `eth_*` namespace, enabling any EVM-compatible client to interact with deployed Soroban contracts without modification.
+```
++===========================================================================+
+|                         DEVELOPER INTERFACE                                |
+|  Solidity (.sol) | Hardhat | Foundry | ethers.js | MetaMask | viem        |
++===========================================================================+
+                                    |
+                                    v
++===========================================================================+
+|                     COMPILATION LAYER (Solang)                              |
+|                                                                            |
+|  Solidity Source --> [Frontend] --> [Codegen] --> [LLVM IR] --> Soroban WASM|
+|                                                                            |
+|  Translations: msg.sender --> requireAuth() | slots --> typed entries      |
+|                ABI encoding --> ScVal       | selectors --> named exports  |
++===========================================================================+
+                                    |
+                                    v
++===========================================================================+
+|                   RPC TRANSLATION LAYER (Stateless)                         |
+|                                                                            |
+|  T_tx:   EVM transaction --> InvokeHostFunction operation                  |
+|  T_block: Stellar ledger --> EVM block                                     |
+|  T_rcpt: Soroban result  --> EVM receipt                                   |
+|  T_log:  Soroban event   --> EVM log        T_addr: addr <--> addr         |
++===========================================================================+
+                                    |
+                                    v
++===========================================================================+
+|                   ACCOUNT MANAGEMENT LAYER                                  |
+|  secp256k1 (EVM) <--> Ed25519 (Stellar) | AccountRegistry (on-chain)      |
++===========================================================================+
+                                    |
+                                    v
++===========================================================================+
+|                     SETTLEMENT LAYER (Stellar)                              |
+|  Soroban VM | SCP (5s finality) | Multi-asset | No MEV | TTL archival      |
++===========================================================================+
+```
 
-The translation is bidirectional: outbound (EVM tx format to Stellar tx format) and inbound (Stellar ledger data to EVM block/receipt format).
+**Trust boundary**: Trust_TVA = Trust_Stellar + Trust_Solang. No bridges, custodians, challenge periods, or data availability committees.
 
-3.2 Transaction Translation
+---
 
-An Ethereum transaction contains: nonce, gas price, gas limit, to (contract address), value (ETH amount), data (ABI-encoded calldata), and signature (v, r, s).
+## 4. Compilation Pipeline
 
-The RPC layer translates this to a Stellar transaction containing: source account, fee (in stroops), sequence number, and an InvokeHostFunction operation specifying the contract ID, function name, and ScVal-encoded arguments.
+### 4.1 Pipeline Stages
 
-Translation steps:
-1. Address Resolution: Map the 20-byte Ethereum address to its corresponding Soroban contract ID via the AccountRegistry.
-2. Calldata Decoding: Extract the 4-byte function selector, look up the function name from the compiled ABI, decode ABI-encoded parameters, and re-encode as ScVal arguments.
-3. Fee Translation: Convert gas-based fee model to Soroban's resource-based fee model via simulation.
-4. Signature Handling: The wallet adapter manages dual-key operations (secp256k1 for EVM signing, Ed25519 for Stellar submission).
+```
+Solidity Source --> [Solang Frontend: lexer, parser, semantic analysis, type checking]
+    --> [Codegen: CFG generation, Soroban dispatch wrappers, ScVal encoding, host mapping]
+    --> [LLVM IR: module construction, TargetRuntime impl, storage ops, value encoding]
+    --> [LLVM Backend: O2/O3 optimization, wasm32-unknown-unknown target]
+    --> [Soroban Linker: wasm-ld, import rewriting, 1 MiB memory config]
+    --> Output: .wasm (Soroban module) + contract spec (ScSpecEntry per function)
+```
 
-3.3 Block and Receipt Emulation
+### 4.2 Semantic Transformation Rules
 
-The RPC layer constructs EVM-compatible responses from Stellar data:
-- Stellar ledger sequence maps to EVM block number
-- Ledger close time maps to block timestamp
-- Transaction set hash maps to block hash
-- Soroban transaction results map to EVM transaction receipts
-- Soroban contract events map to EVM logs (topics + data format)
+**Definition 4.1 (Storage).** EVM storage S_EVM : uint256 -> uint256 maps to Soroban typed entries S_Soroban : (Symbol, StorageType) -> ScVal, where StorageType in {Temporary, Instance, Persistent}.
 
-3.4 Supported Methods
+    T_storage(slot_i) = (symbol_i, durability_i, scval_i)
 
-Account methods: eth_getBalance, eth_getTransactionCount, eth_getCode
-Transaction methods: eth_sendRawTransaction, eth_getTransactionByHash, eth_getTransactionReceipt, eth_estimateGas, eth_call
-Block methods: eth_blockNumber, eth_getBlockByNumber, eth_getBlockByHash
-Log methods: eth_getLogs, eth_subscribe (WebSocket)
-Chain methods: eth_chainId, net_version, eth_gasPrice
-Deployment: eth_sendRawTransaction with empty `to` field triggers compile-and-deploy
+Durability semantics: Temporary (deleted post-invocation), Instance (contract-lifetime), Persistent (TTL-managed, archivable).
 
+**Definition 4.2 (Dispatch).** EVM selector = keccak256(sig)[0:4] maps to named WASM exports. For each public function f, the compiler generates:
 
-4. Account and Address Management
+    export_f : (ScVal_1, ..., ScVal_n) -> ScVal_ret
 
-4.1 The Address Problem
+which decodes host arguments, invokes logic, and encodes the return value.
 
-EVM uses 20-byte addresses derived from secp256k1 public keys. Stellar uses 32-byte Ed25519 public keys (displayed as 56-character base32 G-addresses). TVA must bridge this gap without compromising security on either side.
+**Definition 4.3 (Value Encoding).** EVM ABI uses 32-byte padded slots. Soroban ScVal uses tagged 64-bit values:
 
-4.2 Dual-Key Architecture
+    ScVal(x) = { tag(x) << 1 | x,          if |x| <= 63 bits (inline)
+               { obj_ref(host_alloc(x)),     otherwise (host object)
 
-Each TVA account holds both key types. The secp256k1 keypair provides the EVM-facing 20-byte address for developer tooling compatibility. The Ed25519 keypair provides the Stellar-facing address for on-chain transaction submission. The mapping between them is registered in the on-chain AccountRegistry contract.
+Integer width rounding: uint8..32 -> i32, uint33..64 -> i64, uint65..128 -> i128, uint129..256 -> i256.
 
-4.3 AccountRegistry Contract
+**Definition 4.4 (Authorization).** msg.sender checks transform to requireAuth():
 
-The AccountRegistry is a Soroban contract (compiled from Solidity via Solang) that maintains bidirectional mappings between EVM-derived accounts and their corresponding Stellar accounts. It uses `requireAuth()` to verify Stellar account ownership during registration, preventing unauthorized mappings. The contract tracks registration count and supports admin-controlled updates for key rotation scenarios.
+    require(msg.sender == addr)  -->  addr.requireAuth()
 
+### 4.3 Host Function Interface
 
-5. Storage and State Management
+```
+Storage:   l.put_contract_data(key, val, type) | l.get_contract_data(key, type)
+           l.has_contract_data(key, type)      | l.del_contract_data(key, type)
+TTL:       l.extend_contract_data_ttl(key, type, threshold, extend_to)
+           l.extend_current_contract_instance_and_code_ttl(threshold, extend_to)
+Auth:      l.require_auth(address) | l.require_auth_for_args(address, args)
+Values:    l.symbol_new_from_linear_memory | l.vec_new_from_linear_memory
+           l.obj_to_u64 | l.obj_from_u64
+Events:    l.log_from_linear_memory(msg_offset, msg_len, ...)
+```
 
-5.1 Storage Type Inference
+### 4.4 Current Constraints
 
-Soroban's state archival system distinguishes three storage durabilities. TVA's compiler extensions (planned) will automatically infer storage types from usage patterns:
+1. **Event emission**: `todo!()` stub in codegen; events parsed but not emitted. Priority: critical.
+2. **Mapping keys**: bytes20/bytes32 keys cause ScVal encoder panics. Priority: high.
+3. **TTL scope**: `.extendTtl()` limited to uint64 persistent variables. Priority: medium.
+4. **No inline assembly**: Soroban WASM has no EVM opcode equivalents.
+5. **No delegatecall**: Soroban lacks cross-contract storage context execution.
 
-- Temporary: Variables used only within a single function call
-- Instance: Contract-wide configuration set once (admin addresses, token metadata)
-- Persistent: Variables modified across multiple transactions (balances, counters)
+These are engineering gaps, not architectural limitations.
 
-Currently, developers must explicitly annotate storage types using the `persistent`, `instance`, and `temporary` keywords.
+---
 
-5.2 TTL Management
+## 5. RPC Translation Layer
 
-Soroban entries have a Time-To-Live (TTL) measured in ledger sequences. If TTL expires, persistent entries are archived (still recoverable) and temporary entries are deleted. TVA contracts use `extendTtl()` on persistent variables and `extendInstanceTtl()` for contract-level lifetime management.
+### 5.1 Formal Definition
 
-The RPC layer will transparently handle state restoration: if a contract call fails due to archived state, the RPC layer submits a restoration transaction and retries.
+The TVA RPC layer implements T : RPC_EVM -> RPC_Stellar with the correctness property:
 
-5.3 Current TTL Constraints
+    For all m in RPC_EVM, params p, state sigma:
+    response(T(m, p), sigma_Stellar) ~ expected_response(m, p, sigma_EVM)
 
-The `extendTtl()` method in the current Solang Soroban target is limited to `uint64` persistent/temporary variables. For other types (int128, mappings), TTL management relies on `extendInstanceTtl()` to keep the entire contract instance alive. TVA's compiler extensions will broaden extendTtl support to all persistent variable types.
+**Properties**: (5.1) Semantics preservation -- identical observable effects. (5.2) Statelessness -- no mutable state, no keys, no custody. (5.3) Read idempotency -- identical responses for identical inputs and state.
 
+### 5.2 Transaction Translation
 
-6. Settlement Properties
+    T_EVM = (nonce, gasPrice, gasLimit, to, value, data, v, r, s)
+        -->
+    T_Stellar = (source_account, fee, sequence_number, operations[], signatures[])
 
-6.1 Finality
+```
+PROCEDURE TranslateTransaction(T_EVM):
+  1. ADDRESS RESOLUTION: contract_id = Registry.resolve(T_EVM.to)
+  2. CALLDATA DECODING: selector -> function_name; ABI.decode -> ScVal.encode
+  3. FEE TRANSLATION: Soroban.simulate() -> resource-based fee in stroops
+  4. OPERATION: InvokeHostFunction(contract_id, function_name, params_scval)
+  5. SIGNATURE: Ed25519.sign(stellar_tx.hash(), source.ed25519_key)
+```
 
-Stellar provides deterministic finality via the Stellar Consensus Protocol (SCP), a Federated Byzantine Agreement mechanism. Once a ledger closes (approximately every 5 seconds), its transactions are final. There are no reorgs, no probabilistic confirmation, and no challenge periods.
+### 5.3 Block and Receipt Emulation
 
-This is fundamentally different from:
-- Ethereum L1: ~12 minutes for probabilistic finality
-- Optimistic rollups: 7-day challenge period for finality
-- ZK rollups: hours-to-days for proof generation and L1 verification
+```
+Ledger --> Block:   sequence -> number | close_time -> timestamp | tx_set_hash -> hash
+Result --> Receipt: tx_hash -> transactionHash | success -> status | events -> logs
+Event --> Log:      contract_id -> address | topics -> topics | data -> data
+```
 
-6.2 Fee Model
+### 5.4 Supported Methods
 
-Stellar transaction fees are denominated in stroops (1 XLM = 10,000,000 stroops). Typical transaction fees are in the range of 100-10,000 stroops (fractions of a cent). The RPC layer translates this to an EVM gas-price equivalent for tooling compatibility.
+**Account**: eth_getBalance, eth_getTransactionCount, eth_getCode
+**Transaction**: eth_sendRawTransaction, eth_getTransactionByHash, eth_getTransactionReceipt, eth_estimateGas, eth_call
+**Block**: eth_blockNumber, eth_getBlockByNumber, eth_getBlockByHash
+**Events**: eth_getLogs, eth_subscribe (WebSocket)
+**Chain**: eth_chainId, net_version, eth_gasPrice
+**Deploy**: eth_sendRawTransaction with null `to` triggers compile-and-deploy pipeline.
 
-6.3 No MEV
+---
 
-SCP does not have a mempool-based ordering mechanism that enables Miner Extractable Value (MEV). Transactions are ordered by the consensus process, not by fee-based priority. This eliminates an entire class of economic attacks (frontrunning, sandwich attacks, backrunning) that plague EVM ecosystems.
+## 6. Account Model
 
+### 6.1 The Address Problem
 
-7. Security Model
+EVM: addr = keccak256(pubkey_secp256k1)[12:32] (20 bytes).
+Stellar: addr = base32(version || pubkey_ed25519 || checksum) (56 chars).
+Incompatible key algorithms, derivation functions, and lengths.
 
-7.1 Compiler as the Critical Path
+### 6.2 Dual-Key Architecture
 
-The Solang compiler is the primary security-critical component. Incorrect compilation could lead to:
-- Storage corruption (wrong key mapping)
-- Authorization bypass (missing requireAuth placement)
-- Integer overflow (incorrect width handling)
-- State loss (improper TTL management)
+Each TVA account holds both keypairs: secp256k1 (EVM-facing, 20-byte address for MetaMask/hardware wallets) and Ed25519 (Stellar-facing, G-address for on-chain submission). The mapping is registered in the on-chain AccountRegistry.
 
-Mitigations: Solang has an existing test suite and fuzzing infrastructure. TVA adds a verification step (compile, decompile WASM, verify semantic equivalence). Contract developers can audit generated WASM before deployment. Formal verification tooling is planned for later phases.
+### 6.3 AccountRegistry Contract
 
-7.2 Translation Layer Security
+A Soroban contract (compiled from Solidity via Solang) maintaining bidirectional mappings with requireAuth-gated registration:
 
-The RPC translation layer must faithfully convert between formats:
-- Signature verification on both EVM and Stellar sides
-- Nonce management to prevent replay attacks across both formats
-- Amount precision handling (18 decimals for EVM tokens vs. 7 for XLM)
-- Address mapping bijectivity enforcement (no collisions)
+```
+contract AccountRegistry {
+    mapping(address => bytes32) persistent evmToStellar;
+    mapping(bytes32 => address) persistent stellarToEvm;
+    uint64 persistent registrationCount;
 
-7.3 Soroban VM Guarantees
+    function register(address evmAddr, bytes32 stellarAddr) public {
+        address(stellarAddr).requireAuth();
+        evmToStellar[evmAddr] = stellarAddr;
+        stellarToEvm[stellarAddr] = evmAddr;
+        registrationCount += 1;
+    }
+}
+```
 
-The Soroban VM provides strong isolation:
-- Sandboxed WASM execution with no host memory access
-- Resource metering (CPU and memory limits enforced per invocation)
-- No reentrancy by default (Soroban's call model prevents reentrant calls)
-- State isolation (each contract has independent storage namespace)
+### 6.4 Address Derivation
 
-7.4 Trust Assumptions
+For deterministic generation from a single seed:
 
-TVA Protocol inherits Stellar's trust model:
-- Stellar consensus is honest-majority (SCP quorum slice model)
-- Hash functions are collision-resistant
-- The Solang compiler produces semantically correct output (verified by tests)
-- The RPC layer is a stateless translator (no funds custody, no key material)
+    privkey_evm     = HKDF-SHA256(seed, "tva/evm", 32)
+    privkey_stellar = HKDF-SHA256(seed, "tva/stellar", 32)
+    addr_evm        = keccak256(secp256k1_pubkey(privkey_evm))[12:32]
+    addr_stellar    = ed25519_pubkey(privkey_stellar)
 
+Single mnemonic, two identities, no key reuse across algorithms.
 
-8. Comparison to Alternatives
+---
 
-8.1 vs. Interpretation-Based Approaches
+## 7. Security Model
 
-Neon EVM (Solana) and Aurora (NEAR) run EVM bytecode interpreters as smart contracts on their respective platforms. This introduces interpretation overhead, gas translation complexity, and a large attack surface (the EVM interpreter itself). TVA compiles to native WASM, eliminating the interpreter entirely.
+### 7.1 Trust Assumptions
 
-8.2 vs. EVM L2s
+**A1 (Stellar Consensus)**: SCP provides safety and liveness under FBA. No two honest nodes externalize different values for the same slot.
 
-Optimistic rollups (Optimism, Arbitrum) and ZK rollups (zkSync, Polygon zkEVM) all settle to Ethereum L1. They inherit Ethereum's economics, are constrained by its data availability, and introduce challenge periods or proof generation delays. TVA settles on Stellar with 5-second finality and independent economics.
+**A2 (Compiler Correctness)**: For all programs S and inputs I: eval(compile(S), I) = eval_solidity(S, I) modulo defined semantic adaptations.
 
-8.3 vs. Stylus (Arbitrum)
+**A3 (Cryptographic Hardness)**: SHA-256/keccak256 collision resistance; secp256k1/Ed25519 DLP hardness; HKDF security.
 
-Stylus allows WASM execution alongside EVM on Arbitrum. However, it targets Rust/C/C++ developers wanting EVM-chain settlement, and still settles to Ethereum L1 with a 7-day challenge period. TVA targets Solidity developers wanting non-Ethereum settlement with instant finality.
+**A4 (Soroban VM)**: Correct WASM execution within defined resource limits and isolation boundaries.
 
-8.4 Unique Position
+No additional assumptions: no bridge operators, no DA committees, no fraud validators, no sequencer liveness.
 
-TVA Protocol occupies a unique position: compilation to native execution (not interpretation) on a non-Ethereum settlement layer (not an L2) with deterministic finality (not probabilistic or challenged). No existing project occupies this exact niche.
+### 7.2 Attack Surface
 
+**Compiler bugs**: Storage corruption, auth bypass, integer overflow, state loss. Mitigated by Solang test suite, compile-decompile-verify, planned formal verification.
 
-9. Token and Asset Integration
+**RPC translation errors**: Wrong addresses, incorrect invocations, precision loss. Mitigated by stateless deterministic design, comprehensive integration tests.
 
-9.1 ERC20-Compatible Tokens
+**Registry manipulation**: Prevented by requireAuth gating on Stellar account.
 
-Standard ERC20 token patterns compile to Soroban with the following adaptations:
-- `transfer(from, to, amount)` replaces `transfer(to, amount)` -- the caller is explicit and must requireAuth
-- Balances use `int128` (matching Soroban's native token interface) rather than `uint256`
-- Allowance patterns use explicit spender authorization rather than msg.sender inference
-- TTL management is handled at the contract instance level
+### 7.3 Comparison to Emulation Security
 
-9.2 Native Stellar Asset Wrapping
+```
+Emulation TCB (on-chain):              TVA TCB (on-chain):
+  EVM interpreter (~10,000+ LOC)         0 additional LOC
+  150+ opcode implementations            (only developer's compiled WASM)
+  Gas metering logic
+  Storage emulation
+  Precompile contracts
+```
 
-Stellar's native assets (XLM, USDC issued on Stellar, etc.) can be wrapped as ERC20-compatible contracts. A TVA wrapper contract holds the native asset in trust, exposing standard transfer/approve/allowance interfaces. MetaMask displays these as standard tokens.
+Compilation moves complexity off-chain into an exhaustively testable compiler.
 
+### 7.4 Formal Verification Targets
 
-10. Development Roadmap
+1. Transaction translation correctness: T_tx(tx_evm) produces semantically equivalent Soroban invocation.
+2. Address mapping bijectivity: no collisions possible in AccountRegistry.
+3. Value encoding round-trip: ScVal.decode(ScVal.encode(v)) = v for all Solidity values v.
 
-Phase 1 (Foundation): Prove the compilation pipeline end-to-end. Compile reference contracts (Counter, Token, Registry) to Soroban WASM. Establish Stellar CLI tooling. Document translation rules. [Current Phase]
+---
 
-Phase 2 (RPC Layer): Implement core JSON-RPC server. Build transaction format translator. Implement AccountRegistry. Build block/receipt emulator. Enable MetaMask connectivity.
+## 8. Settlement Properties
 
-Phase 3 (Developer Tooling): Build TVA CLI. Create Hardhat plugin. Foundry compatibility. Contract verification service. Block explorer. Faucet.
+### 8.1 Finality
 
-Phase 4 (Production): Security audit. Formal verification. Load testing. Redundant infrastructure. Mainnet deployment.
+SCP provides deterministic finality:
 
-Phase 5 (Ecosystem): Port reference DeFi contracts. Native asset wrappers. Cross-chain bridge. Governance. Developer grants.
+    P(reorg | ledger_closed) = 0
 
+Not probabilistic (Nakamoto) but absolute. Finality time:
 
-11. Technical Specifications
+    t_finality = t_rpc_translation + t_propagation + t_scp_voting ~ 5 seconds
 
-Build System:
-- Rust 1.88+ (Solang compilation)
-- LLVM 16 (backend code generation)
-- Build: cargo build --release --no-default-features --features "llvm,soroban"
-- Output: ~132 MB statically-linked binary
+Compared to: Ethereum L1 (~12 min), Optimistic L2 (7 days), ZK L2 (1-24 hours).
 
-Compilation Command:
-- solang compile <file.sol> --target soroban -o <output_dir>
-- Produces: .wasm (Soroban module) + .abi (function signatures)
+### 8.2 MEV Resistance
 
-Deployment:
-- stellar contract deploy --wasm <file.wasm> --source <identity> --network testnet
-- stellar contract invoke --id <contract_id> -- init <args>
+SCP uses nomination and ballot protocols, not fee-based priority ordering:
 
-Stellar Network Parameters:
-- Protocol: Soroban (Protocol 23+)
-- Block time: ~5 seconds
-- Native currency: XLM (7 decimal places)
-- Contract size limit: ~64 KB WASM
-- Memory limit: 1 MiB per invocation
-- TTL range: 4,095 to 535,679 ledgers per extension
+    for all permutations pi: ordering determined by consensus, not validator profit
 
+No frontrunning, sandwich attacks, or backrunning.
 
-12. Conclusion
+### 8.3 Fee Model
 
-TVA Protocol represents a fundamentally different approach to blockchain interoperability. Rather than bridges, token wrapping, or bytecode interpretation, we compile. The Solidity developer's source code becomes native Soroban execution, settling on Stellar with deterministic finality.
+Resource-based metering:
 
-The key contributions are:
+    fee = f(cpu_instructions, memory_bytes, storage_reads, storage_writes, bandwidth)
 
-1. Compilation over interpretation: No EVM runtime overhead; contracts execute as native WASM on the Soroban VM.
-2. Translation over bridging: No lock-and-mint assumptions; addresses are mapped, not bridged; funds are never in custody.
-3. Native settlement: Transactions are Stellar-native from inception; no challenge periods, no data availability committees, no rollup proofs.
-4. Developer transparency: Write Solidity, use Hardhat, deploy to Stellar -- the compilation and translation complexity is hidden behind familiar interfaces.
+Each dimension independently priced and limited. The RPC layer translates:
 
-The path forward is clear: complete the RPC translation layer, extend the compiler to cover events and broader type support, build the developer tooling, and the entire Ethereum ecosystem gains access to Stellar's settlement infrastructure.
+    gas_equivalent = ceil(fee_stroops / gas_price_stroops_per_gas)
 
+Typical costs: 100 - 10,000 stroops (< $0.001).
 
-Document Version: 2.0
-Last Updated: January 2026
-Status: Active Development -- Phase 1 (Compilation Pipeline Validated)
+### 8.4 Fee Stability
+
+Unlike EVM chains where gas prices fluctuate 100x+ during congestion, Stellar's base fee remains stable. Surge pricing is bounded by protocol parameters, not unbounded auction dynamics.
+
+---
+
+## 9. Comparison to Alternatives
+
+| Property | TVA Protocol | Neon EVM (Solana) | Aurora (NEAR) | Stylus (Arbitrum) |
+|----------|-------------|-------------------|---------------|-------------------|
+| Approach | Compilation | Interpretation | Interpretation | WASM coprocessor |
+| Settlement | Stellar (SCP) | Solana (Tower BFT) | NEAR (Nightshade) | Ethereum L1 |
+| Finality | 5s deterministic | ~400ms probabilistic | ~2s probabilistic | 7-day challenge |
+| TCB Size | Small (compiler) | Large (interpreter) | Large (interpreter) | Medium |
+| Performance | Native WASM | EVM overhead | EVM overhead | Near-native |
+| MEV | None | Partial (Jito) | Partial | Full (L1 MEV) |
+| Input Language | Solidity | Solidity | Solidity | Rust/C/C++ |
+| Fee Currency | XLM | SOL | ETH (bridged) | ETH |
+| Reentrancy | Impossible | Present | Present | Configurable |
+
+**Security**: Neon/Aurora trust ~10,000+ lines of on-chain interpreter. TVA trusts only the off-chain compiler. On-chain TCB delta: 0.
+
+**Performance**: TVA executes at native Soroban speed. Interpretation adds constant-factor overhead per opcode.
+
+**Developer Experience**: TVA is the only system targeting Stellar settlement with EVM developer interface. Stylus targets different developers (Rust/C++) on a different settlement layer (Ethereum L1 via Arbitrum).
+
+---
+
+## 10. Limitations and Future Work
+
+### 10.1 Current Solang Limitations
+
+1. **Event emission** (Critical): `todo!()` stub must be replaced with `l.log_from_linear_memory()` calls.
+2. **Fixed-byte mapping keys** (High): bytes20/bytes32 keys trigger ScVal encoder panics.
+3. **msg.sender shimming** (High): AST pattern matching for require(msg.sender == x) -> x.requireAuth().
+4. **Storage type inference** (Medium): Static analysis for automatic durability assignment.
+5. **Broader extendTtl** (Medium): Support all persistent types, not only uint64.
+
+### 10.2 Token Standard Compatibility
+
+**ERC-20**: Requires msg.sender shimming + event emission. Balances use int128 vs uint256.
+**ERC-721**: ERC-20 prerequisites + token ownership mappings + metadata URI support.
+**ERC-1155**: Batch operations compile naturally; resource limit testing needed.
+**ERC-4626**: Precision handling for share/asset calculations across integer widths.
+
+### 10.3 Compiler Extension Roadmap
+
+| Extension | Complexity | Phase |
+|-----------|------------|-------|
+| Event codegen (Soroban events matching EVM log semantics) | Medium | 2 |
+| msg.sender shim (AST pattern matching + requireAuth) | High | 2 |
+| bytes key support (ScVal encoding for fixed-byte keys) | Medium | 2 |
+| TTL auto-injection (extendTtl after persistent writes) | Low | 2 |
+| Constructor params (constructor -> init translation) | Low | 2 |
+| Storage inference (static durability analysis) | Medium | 3 |
+| Integer transparency (silent width rounding) | Low | 2 |
+
+### 10.4 Research Directions
+
+1. **Formal verification**: Machine-checked proofs (Coq/Lean) of Solang Soroban backend correctness.
+2. **Cross-chain composability**: Standardized message-passing for compiled Stellar contracts.
+3. **ZK integration**: Soroban WASM execution for ZK proof verification.
+4. **Optimistic compilation verification**: Independent verifier network comparing WASM outputs.
+
+---
+
+## 11. Technical Specifications
+
+### 11.1 Build System
+
+```
+Requirements: Rust 1.88+, LLVM 16, clang-16
+Build:        cargo build --release --no-default-features --features "llvm,soroban"
+Output:       ~132 MB statically-linked binary (solang)
+Compile:      solang compile <file.sol> --target soroban -o <output_dir>
+Deploy:       stellar contract deploy --wasm <file.wasm> --source <id> --network testnet
+Init:         stellar contract invoke --id <contract_id> -- init [args]
+```
+
+### 11.2 Network Parameters
+
+```
+Protocol:          Soroban (Protocol 23+)
+Consensus:         SCP (Federated Byzantine Agreement)
+Ledger Close:      ~5 seconds
+Native Currency:   XLM (7 decimals, 1 XLM = 10^7 stroops)
+Contract Limit:    ~64 KB WASM
+Memory Limit:      1 MiB per invocation
+TTL Range:         4,095 - 535,679 ledgers (~5.5 hours to ~31 days)
+State Archival:    Persistent entries archived after TTL; recoverable
+```
+
+### 11.3 TVA Parameters
+
+```
+Chain ID:          To be registered (EIP-3770)
+Block Time:        5 seconds (Stellar-inherited)
+Finality:          1 block (deterministic)
+Gas Model:         Stellar base fee / reference resource units
+Solidity Support:  pragma solidity >=0.7.0 (Solang range)
+```
+
+---
+
+## 12. Conclusion
+
+TVA Protocol demonstrates that compilation-based EVM compatibility is architecturally superior to emulation for bringing EVM developers to new L1 chains. The contributions:
+
+1. **Minimal trust**: No on-chain TCB beyond the developer's own compiled WASM. The compiler is off-chain and exhaustively testable.
+2. **Native performance**: Compiled contracts execute at full Soroban VM speed with no interpretation overhead.
+3. **Deterministic settlement**: 5-second finality, zero reorgs, no MEV, no challenge periods.
+4. **Developer transparency**: Standard Solidity workflow; Stellar settlement is invisible to the developer.
+5. **Reduced attack surface**: Zero additional on-chain code vs. 10,000+ lines for interpreter approaches.
+
+The path forward: complete compiler extensions (events, msg.sender, type support), build the RPC translation layer, and package developer tooling. The entire Ethereum ecosystem then gains access to Stellar's settlement infrastructure without modification.
+
+TVA inverts blockchain interoperability: instead of asking developers to port code to a new ecosystem, we bring the ecosystem's execution environment to them. The compilation boundary is invisible. The settlement properties are superior. The security model is simpler.
+
+---
+
+## References
+
+1. Mazieres, D. "The Stellar Consensus Protocol: A Federated Model for Internet-level Consensus." Stellar Development Foundation, 2015.
+2. Hyperledger Solang. "Solang Solidity Compiler." https://github.com/hyperledger-solang/solang
+3. Stellar Development Foundation. "Soroban Smart Contracts." Soroban Documentation, 2024.
+4. Ethereum Foundation. "Ethereum JSON-RPC Specification." https://ethereum.org/en/developers/docs/apis/json-rpc/
+5. Ethereum Foundation. "Solidity Language Specification." https://docs.soliditylang.org/
+6. LLVM Project. "LLVM Language Reference Manual, Version 16." https://llvm.org/docs/LangRef.html
+7. WebAssembly Community Group. "WebAssembly Specification." https://webassembly.github.io/spec/
+8. Wood, G. "Ethereum: A Secure Decentralised Generalised Transaction Ledger." Ethereum Yellow Paper, 2014.
+9. Neon Labs. "Neon EVM: Ethereum Virtual Machine on Solana." Technical Documentation, 2023.
+10. Aurora. "Aurora: EVM on NEAR Protocol." Technical Documentation, 2023.
+11. Offchain Labs. "Stylus: WASM Smart Contracts on Arbitrum." Technical Documentation, 2024.
+
+---
+
+*Document Version: 3.0*
+*Last Updated: January 2026*
+*Status: Active Development -- Phase 1 (Compilation Pipeline Validated)*
+*Authors: TVA Protocol Team*

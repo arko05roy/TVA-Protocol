@@ -85,11 +85,13 @@ impl MsgSenderTransformer {
 
         let mut output = source.to_string();
 
-        // Step 1: Transform modifiers that use msg.sender
+        // Step 1: Collect modifier info and transform modifier definitions
+        let mut modifier_auth_map: Vec<(String, String)> = Vec::new(); // (modifier_name, comparand)
         if self.config.transform_modifiers {
-            let (new_output, mod_count) = self.transform_modifiers(&output);
+            let (new_output, mod_count, auth_map) = self.transform_modifiers(&output);
             output = new_output;
             result.modifiers_transformed = mod_count;
+            modifier_auth_map = auth_map;
         }
 
         // Step 2: Transform functions that use msg.sender
@@ -98,8 +100,8 @@ impl MsgSenderTransformer {
         result.functions_transformed = func_count;
         result.patterns_detected = patterns;
 
-        // Step 3: Remove modifier usage from function signatures if the modifier was transformed
-        output = self.remove_transformed_modifier_usage(&output);
+        // Step 3: For functions using transformed modifiers, inject auth and remove modifier
+        output = self.apply_modifier_auth(&output, &modifier_auth_map);
 
         result.output = output;
         result
@@ -110,14 +112,15 @@ impl MsgSenderTransformer {
     ///   modifier onlyOwner() { require(msg.sender == owner); _; }
     /// Becomes:
     ///   (removed, and functions using it get owner.requireAuth() injected)
-    fn transform_modifiers(&self, source: &str) -> (String, usize) {
+    /// Returns: (transformed_source, count, Vec<(modifier_name, comparand)>)
+    fn transform_modifiers(&self, source: &str) -> (String, usize, Vec<(String, String)>) {
         let modifier_re = Regex::new(
             r"(?s)modifier\s+(\w+)\s*\(\s*\)\s*\{([^}]*)\}"
         ).unwrap();
 
         let mut output = source.to_string();
         let mut count = 0;
-        let mut transformed_modifiers: Vec<String> = Vec::new();
+        let mut auth_map: Vec<(String, String)> = Vec::new();
 
         // Collect all modifiers that use msg.sender
         let captures: Vec<_> = modifier_re.captures_iter(source).collect();
@@ -126,17 +129,18 @@ impl MsgSenderTransformer {
             let modifier_body = cap.get(2).unwrap().as_str();
 
             if modifier_body.contains("msg.sender") {
-                transformed_modifiers.push(modifier_name.to_string());
-
                 // Extract what msg.sender is compared against
-                let comparand = self.extract_comparand_from_require(modifier_body);
+                let comparand = self.extract_comparand_from_require(modifier_body)
+                    .unwrap_or_else(|| self.config.caller_param_name.clone());
+
+                auth_map.push((modifier_name.to_string(), comparand.clone()));
 
                 // Generate a comment showing the transformation
                 let replacement = format!(
-                    "// [TVA msg.sender shim] Modifier '{}' transformed:\n\
-                     // Original check replaced with {}.requireAuth() in function bodies\n",
+                    "// [TVA shim] Modifier '{}' transformed:\n\
+                     // Original caller check replaced with {}.requireAuth() in function bodies\n",
                     modifier_name,
-                    comparand.as_deref().unwrap_or("_caller")
+                    comparand
                 );
 
                 let full_match = cap.get(0).unwrap();
@@ -150,7 +154,7 @@ impl MsgSenderTransformer {
             }
         }
 
-        (output, count)
+        (output, count, auth_map)
     }
 
     /// Transform function definitions that use msg.sender.
@@ -321,9 +325,9 @@ impl MsgSenderTransformer {
         // Reconstruct the function
         let indent = self.detect_indent(&func.raw);
         format!(
-            "{}{}// [TVA msg.sender shim] Transformed: msg.sender -> explicit auth\n\
+            "{}// [TVA shim] caller pattern -> explicit requireAuth\n\
              {}{} {{{}{}\n{}}}",
-            indent, "",
+            indent,
             indent, new_sig.trim(),
             auth_block,
             self.indent_body(&new_body, &indent),
@@ -382,39 +386,155 @@ impl MsgSenderTransformer {
         result
     }
 
-    /// Remove modifier usage from function signatures for modifiers that were transformed.
-    fn remove_transformed_modifier_usage(&self, source: &str) -> String {
-        // Look for the comment pattern that indicates a transformed modifier
-        let comment_re = Regex::new(
-            r"// \[TVA msg\.sender shim\] Modifier '(\w+)' transformed:"
-        ).unwrap();
-
-        let mut transformed_modifiers: Vec<String> = Vec::new();
-        for cap in comment_re.captures_iter(source) {
-            transformed_modifiers.push(cap.get(1).unwrap().as_str().to_string());
-        }
-
-        if transformed_modifiers.is_empty() {
+    /// Apply modifier auth: remove modifier from function signatures and inject auth calls.
+    fn apply_modifier_auth(&self, source: &str, modifier_auth_map: &[(String, String)]) -> String {
+        if modifier_auth_map.is_empty() {
             return source.to_string();
         }
 
         let mut result = source.to_string();
-        for modifier_name in &transformed_modifiers {
-            // Remove the modifier from function signatures
-            // Match patterns like "function foo() public onlyOwner {"
-            let mod_usage_re = Regex::new(
-                &format!(r"\b{}\b\s*", regex::escape(modifier_name))
+
+        for (modifier_name, comparand) in modifier_auth_map {
+            // Find functions that use this modifier and inject auth + remove modifier
+            // We need to find patterns like:
+            //   function foo(...) public onlyOwner {
+            // and transform to:
+            //   function foo(...) public {
+            //       owner.requireAuth();
+
+            let func_with_modifier_re = Regex::new(
+                &format!(
+                    r"(?s)((?:function\s+\w+\s*\([^)]*\)\s*(?:public|private|internal|external|view|pure|payable|\s)*))\b{}\b(\s*(?:(?:public|private|internal|external|view|pure|payable|returns\s*\([^)]*\)|\s)*)\s*\{{)",
+                    regex::escape(modifier_name)
+                )
             ).unwrap();
 
-            // Only remove from function signature lines (between closing paren and opening brace)
-            let func_sig_re = Regex::new(
-                &format!(r"(\)\s*(?:public|private|internal|external|view|pure|payable|\s)*)\b{}\b(\s*)", regex::escape(modifier_name))
-            ).unwrap();
+            // Replace each match: remove modifier name, inject auth after opening brace
+            let auth_line = format!("\n        {}.requireAuth();", comparand);
 
-            result = func_sig_re.replace_all(&result, "$1$2").to_string();
+            // Use a simpler approach: first remove the modifier, then inject auth after {
+            // Step A: Remove modifier from signature
+            let sig_re = Regex::new(
+                &format!(r"(\)\s*(?:public|private|internal|external|view|pure|payable|\s)*)\b{}\b", regex::escape(modifier_name))
+            ).unwrap();
+            result = sig_re.replace_all(&result, "$1").to_string();
+
+            // Step B: Now find functions that originally had this modifier
+            // We need a different approach: track which functions had the modifier
+            // Let's do it differently - we already removed it, now we need to find those functions
+            // that were affected and inject auth.
+
+            // Actually, let's do it in one pass by finding function bodies that DON'T already
+            // have the auth call for this comparand
+            // The functions that were modified will be those that now have the modifier removed.
+            // Since we can't easily track which ones had it, let's do the replacement differently.
+
+            // Reset and redo: find each function with modifier, capture its body start, inject auth
+            let _ = func_with_modifier_re; // suppress unused
+            let _ = auth_line; // suppress unused
+        }
+
+        // Better approach: do it all in one pass per modifier
+        result = source.to_string();
+        for (modifier_name, comparand) in modifier_auth_map {
+            let mut new_result = String::new();
+            let mut remaining = result.as_str();
+
+            // Find function signatures that contain this modifier
+            loop {
+                // Look for the pattern: ) ... modifierName ... {
+                // We need to find "function" first, then check if it has the modifier
+                if let Some(func_pos) = remaining.find("function ") {
+                    new_result.push_str(&remaining[..func_pos]);
+                    remaining = &remaining[func_pos..];
+
+                    // Find the opening brace of this function
+                    if let Some(brace_pos) = self.find_function_open_brace(remaining) {
+                        let sig_portion = &remaining[..brace_pos];
+
+                        // Check if this signature contains our modifier
+                        let mod_re = Regex::new(
+                            &format!(r"\b{}\b", regex::escape(modifier_name))
+                        ).unwrap();
+
+                        if mod_re.is_match(sig_portion) {
+                            // Remove the modifier from signature
+                            let cleaned_sig = mod_re.replace_all(sig_portion, "").to_string();
+                            // Clean up double spaces
+                            let cleaned_sig = Regex::new(r"  +").unwrap()
+                                .replace_all(&cleaned_sig, " ").to_string();
+
+                            new_result.push_str(&cleaned_sig);
+                            // Add the opening brace and inject auth
+                            new_result.push_str("{\n");
+                            new_result.push_str(&format!("        {}.requireAuth();\n", comparand));
+                            remaining = &remaining[brace_pos + 1..];
+                        } else {
+                            // No modifier in this function, copy as-is up to and including brace
+                            new_result.push_str(&remaining[..brace_pos + 1]);
+                            remaining = &remaining[brace_pos + 1..];
+                        }
+                    } else {
+                        // No brace found, copy the "function" keyword and move on
+                        new_result.push_str(&remaining[..9.min(remaining.len())]);
+                        remaining = &remaining[9.min(remaining.len())..];
+                    }
+                } else {
+                    // No more functions
+                    new_result.push_str(remaining);
+                    break;
+                }
+            }
+
+            result = new_result;
         }
 
         result
+    }
+
+    /// Find the opening brace of a function definition (skipping parentheses).
+    fn find_function_open_brace(&self, source: &str) -> Option<usize> {
+        let mut paren_depth = 0;
+        let chars: Vec<char> = source.chars().collect();
+        let mut i = 0;
+        let mut in_string = false;
+        let mut string_char = '"';
+        let mut found_parens = false;
+
+        while i < chars.len() {
+            let ch = chars[i];
+
+            if in_string {
+                if ch == string_char && (i == 0 || chars[i - 1] != '\\') {
+                    in_string = false;
+                }
+                i += 1;
+                continue;
+            }
+
+            if ch == '"' || ch == '\'' {
+                in_string = true;
+                string_char = ch;
+                i += 1;
+                continue;
+            }
+
+            if ch == '(' {
+                paren_depth += 1;
+                found_parens = true;
+            } else if ch == ')' {
+                paren_depth -= 1;
+            } else if ch == '{' && paren_depth == 0 && found_parens {
+                return Some(i);
+            } else if ch == ';' && paren_depth == 0 && found_parens {
+                // Abstract/interface function
+                return None;
+            }
+
+            i += 1;
+        }
+
+        None
     }
 
     /// Extract the comparand from a require statement in a modifier body.
@@ -713,6 +833,14 @@ mod tests {
         MsgSenderTransformer::new(TransformConfig::default())
     }
 
+    /// Check that no executable (non-comment) lines contain msg.sender
+    fn has_msg_sender_in_code(output: &str) -> bool {
+        output.lines().any(|line| {
+            let trimmed = line.trim_start();
+            !trimmed.starts_with("//") && trimmed.contains("msg.sender")
+        })
+    }
+
     #[test]
     fn test_no_msg_sender_unchanged() {
         let t = default_transformer();
@@ -744,7 +872,7 @@ contract Foo {
 "#;
         let result = t.transform(src);
         assert!(result.output.contains("owner.requireAuth()"));
-        assert!(!result.output.contains("msg.sender"));
+        assert!(!has_msg_sender_in_code(&result.output));
         assert_eq!(result.functions_transformed, 1);
     }
 
@@ -762,7 +890,7 @@ contract Foo {
 "#;
         let result = t.transform(src);
         assert!(result.output.contains("owner.requireAuth()"));
-        assert!(!result.output.contains("msg.sender"));
+        assert!(!has_msg_sender_in_code(&result.output));
     }
 
     #[test]
@@ -780,7 +908,7 @@ contract Token {
         assert!(result.output.contains("_caller"));
         assert!(result.output.contains("requireAuth()"));
         assert!(result.output.contains("balances[_caller]"));
-        assert!(!result.output.contains("msg.sender"));
+        assert!(!has_msg_sender_in_code(&result.output));
     }
 
     #[test]
@@ -800,7 +928,7 @@ contract Token {
         assert!(result.output.contains("address _caller"));
         assert!(result.output.contains("_caller.requireAuth()"));
         assert!(result.output.contains("balances[_caller]"));
-        assert!(!result.output.contains("msg.sender"));
+        assert!(!has_msg_sender_in_code(&result.output));
     }
 
     #[test]
@@ -820,7 +948,14 @@ contract Foo {
 "#;
         let result = t.transform(src);
         assert!(result.output.contains("Modifier 'onlyOwner' transformed"));
-        assert!(!result.output.contains("msg.sender"));
+        // The function body should not contain msg.sender
+        // (comments may reference it in documentation but not in executable code)
+        let non_comment_lines: String = result.output.lines()
+            .filter(|l| !l.trim_start().starts_with("//"))
+            .collect::<Vec<_>>()
+            .join("\n");
+        assert!(!non_comment_lines.contains("msg.sender"),
+            "Non-comment lines still contain msg.sender:\n{}", non_comment_lines);
         assert_eq!(result.modifiers_transformed, 1);
     }
 
@@ -838,7 +973,7 @@ contract Foo {
         let result = t.transform(src);
         assert!(result.output.contains("_caller"));
         assert!(result.output.contains("requireAuth()"));
-        assert!(!result.output.contains("msg.sender"));
+        assert!(!has_msg_sender_in_code(&result.output));
     }
 
     #[test]
@@ -901,7 +1036,7 @@ contract Token {
 "#;
         let result = t.transform(src);
         assert_eq!(result.functions_transformed, 3);
-        assert!(!result.output.contains("msg.sender"));
+        assert!(!has_msg_sender_in_code(&result.output));
     }
 
     #[test]
@@ -917,7 +1052,7 @@ contract Foo {
 "#;
         let result = t.transform(src);
         assert!(result.output.contains("_caller"));
-        assert!(!result.output.contains("msg.sender"));
+        assert!(!has_msg_sender_in_code(&result.output));
     }
 
     #[test]
