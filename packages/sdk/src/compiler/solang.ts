@@ -256,7 +256,7 @@ export class SolangCompiler {
     } finally {
       // Clean up temp directory if we created one
       if (!this.options.outputDir) {
-        await fs.rm(tempDir, { recursive: true, force: true }).catch(() => {});
+        await fs.rm(tempDir, { recursive: true, force: true }).catch(() => { });
       }
     }
   }
