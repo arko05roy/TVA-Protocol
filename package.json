@@ -1,0 +1,26 @@
+{
+  "name": "tva-protocol",
+  "version": "0.1.0",
+  "private": true,
+  "description": "TVA Protocol - EVM compatibility layer on Stellar",
+  "workspaces": [
+    "packages/sdk",
+    "packages/hardhat-plugin",
+    "packages/wallet-adapter",
+    "packages/ethers-adapter",
+    "client"
+  ],
+  "scripts": {
+    "build": "pnpm -r build",
+    "dev": "pnpm -r --parallel dev",
+    "dev:client": "pnpm --filter client dev",
+    "test": "pnpm -r test",
+    "lint": "pnpm -r lint",
+    "typecheck": "pnpm -r typecheck",
+    "clean": "pnpm -r clean"
+  },
+  "engines": {
+    "node": ">=18.0.0",
+    "pnpm": ">=8.0.0"
+  }
+}

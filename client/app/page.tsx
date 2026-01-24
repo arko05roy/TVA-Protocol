@@ -57,9 +57,7 @@ function ParallelChains() {
             <bufferGeometry>
               <bufferAttribute
                 attach="attributes-position"
-                count={2}
-                array={new Float32Array([-3, chain.y, 0, 3, chain.y, 0])}
-                itemSize={3}
+                args={[new Float32Array([-3, chain.y, 0, 3, chain.y, 0]), 3]}
               />
             </bufferGeometry>
             <lineBasicMaterial
@@ -133,9 +131,7 @@ function FlowingData() {
       <bufferGeometry>
         <bufferAttribute
           attach="attributes-position"
-          count={count}
-          array={positions}
-          itemSize={3}
+          args={[positions, 3]}
         />
       </bufferGeometry>
       <pointsMaterial
@@ -638,12 +634,12 @@ function Comparison() {
   const isInView = useInView(ref, { once: true, margin: "-100px" });
 
   const data = [
-    { prop: "Finality", eth: "~12 min", l2: "7 days*", TVA Protocol: "5 seconds" },
-    { prop: "Transaction Fee", eth: "$0.50–50", l2: "$0.01–0.10", TVA Protocol: "~$0.00001" },
-    { prop: "MEV Exposure", eth: "High", l2: "Medium", TVA Protocol: "None" },
-    { prop: "Execution", eth: "EVM bytecode", l2: "EVM bytecode", TVA Protocol: "Native WASM" },
-    { prop: "Bridge Risk", eth: "N/A", l2: "Required", TVA Protocol: "None" },
-    { prop: "Asset Support", eth: "ETH + ERC20", l2: "ETH + ERC20", TVA Protocol: "Multi-asset native" },
+    { prop: "Finality", eth: "~12 min", l2: "7 days*", "TVA Protocol": "5 seconds" },
+    { prop: "Transaction Fee", eth: "$0.50–50", l2: "$0.01–0.10", "TVA Protocol": "~$0.00001" },
+    { prop: "MEV Exposure", eth: "High", l2: "Medium", "TVA Protocol": "None" },
+    { prop: "Execution", eth: "EVM bytecode", l2: "EVM bytecode", "TVA Protocol": "Native WASM" },
+    { prop: "Bridge Risk", eth: "N/A", l2: "Required", "TVA Protocol": "None" },
+    { prop: "Asset Support", eth: "ETH + ERC20", l2: "ETH + ERC20", "TVA Protocol": "Multi-asset native" },
   ];
 
   return (
@@ -701,7 +697,7 @@ function Comparison() {
               <div className="p-5 md:p-6 font-semibold text-sm md:text-[15px]">{row.prop}</div>
               <div className="p-5 md:p-6 text-[#666] text-center text-sm md:text-[15px]">{row.eth}</div>
               <div className="p-5 md:p-6 text-[#666] text-center text-sm md:text-[15px]">{row.l2}</div>
-              <div className="p-5 md:p-6 text-black font-semibold text-center text-sm md:text-[15px] bg-[#0055ff]/5">{row.TVA Protocol}</div>
+              <div className="p-5 md:p-6 text-black font-semibold text-center text-sm md:text-[15px] bg-[#0055ff]/5">{row["TVA Protocol"]}</div>
             </motion.div>
           ))}
         </motion.div>

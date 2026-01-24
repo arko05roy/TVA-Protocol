@@ -4,6 +4,7 @@ export default defineConfig({
   entry: {
     index: 'src/index.ts',
     'rpc/index': 'src/rpc/index.ts',
+    'types/index': 'src/types/index.ts',
     'compiler/index': 'src/compiler/index.ts',
     'wallet/index': 'src/wallet/index.ts',
     'contract/index': 'src/contract/index.ts',

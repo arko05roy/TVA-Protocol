@@ -1,4 +1,4 @@
-import { q as NetworkConfig, r as NetworkType, m as EvmBlock, E as EvmAddress, p as EvmTransactionReceipt, n as EvmLog } from '../index-CpingBUy.mjs';
+import { NetworkConfig, NetworkType, EvmBlock, EvmAddress, EvmTransactionReceipt, EvmLog } from '../types/index.mjs';
 
 /**
  * TVA Protocol RPC Client

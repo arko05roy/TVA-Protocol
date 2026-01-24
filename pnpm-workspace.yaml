@@ -1,0 +1,6 @@
+packages:
+  - "packages/sdk"
+  - "packages/hardhat-plugin"
+  - "packages/wallet-adapter"
+  - "packages/ethers-adapter"
+  - "client"

@@ -11,6 +11,16 @@
       "require": "./dist/index.js",
       "types": "./dist/index.d.ts"
     },
+    "./rpc": {
+      "import": "./dist/rpc/index.mjs",
+      "require": "./dist/rpc/index.js",
+      "types": "./dist/rpc/index.d.ts"
+    },
+    "./types": {
+      "import": "./dist/types/index.mjs",
+      "require": "./dist/types/index.js",
+      "types": "./dist/types/index.d.ts"
+    },
     "./compiler": {
       "import": "./dist/compiler/index.mjs",
       "require": "./dist/compiler/index.js",

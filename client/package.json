@@ -11,6 +11,7 @@
   "dependencies": {
     "@react-three/drei": "^10.7.7",
     "@react-three/fiber": "^9.5.0",
+    "@tanstack/react-query": "^5.62.0",
     "@tva-protocol/sdk": "workspace:*",
     "@tva-protocol/ethers-adapter": "workspace:*",
     "ethers": "^6.13.4",
