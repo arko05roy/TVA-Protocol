@@ -1,0 +1,19 @@
+[package]
+name = "msg-sender-shim"
+version = "0.1.0"
+edition = "2021"
+description = "TVA Protocol: msg.sender auto-shimming preprocessor for Solang Soroban target"
+authors = ["TVA Protocol Contributors"]
+license = "Apache-2.0"
+
+[[bin]]
+name = "msg-sender-shim"
+path = "src/main.rs"
+
+[dependencies]
+regex = "1"
+clap = { version = "4", features = ["derive"] }
+
+[dev-dependencies]
+tempfile = "3"
+pretty_assertions = "1"

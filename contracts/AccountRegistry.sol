@@ -12,7 +12,7 @@ pragma solidity 0;
  * - The RPC layer maintains the off-chain mapping from raw 20-byte EVM addresses
  *   to their corresponding Soroban address identifiers
  * - requireAuth() for ownership verification (replaces msg.sender)
- * - No events (not yet supported on Solang Soroban target)
+ * - Events emitted for registration, update, and deregistration operations
  * - Only uint64 persistent variables support extendTtl()
  *
  * Registration flow:
@@ -24,6 +24,15 @@ pragma solidity 0;
  * Compile: solang compile AccountRegistry.sol --target soroban
  */
 contract AccountRegistry {
+    /// @notice Emitted when a new account is registered
+    event AccountRegistered(address indexed evmAccount, address indexed stellarAccount);
+    /// @notice Emitted when a registration is updated
+    event RegistrationUpdated(address indexed evmAccount, address indexed newStellarAccount);
+    /// @notice Emitted when a registration is removed
+    event AccountDeregistered(address indexed evmAccount);
+    /// @notice Emitted when admin is changed
+    event AdminChanged(address indexed newAdmin);
+
     // Instance storage - contract configuration
     address public instance registryAdmin;
 
@@ -65,6 +74,8 @@ contract AccountRegistry {
         // Increment registration count and extend its TTL
         registrationCount += 1;
         registrationCount.extendTtl(1000, 100000);
+
+        emit AccountRegistered(evmAccount, stellarAccount);
     }
 
     /// @notice Update an existing registration (admin only)
@@ -84,6 +95,8 @@ contract AccountRegistry {
         // Set new mapping
         evmToStellar[evmAccount] = newStellarAccount;
         stellarToEvm[newStellarAccount] = evmAccount;
+
+        emit RegistrationUpdated(evmAccount, newStellarAccount);
     }
 
     /// @notice Remove a registration (admin only)
@@ -100,6 +113,8 @@ contract AccountRegistry {
         evmToStellar[evmAccount] = address(0);
         stellarToEvm[stellarAccount] = address(0);
         isRegistered[evmAccount] = false;
+
+        emit AccountDeregistered(evmAccount);
     }
 
     // ========== Query Functions ==========
@@ -138,6 +153,7 @@ contract AccountRegistry {
     function set_admin(address newAdmin) public {
         registryAdmin.requireAuth();
         registryAdmin = newAdmin;
+        emit AdminChanged(newAdmin);
     }
 
     // ========== TTL Management ==========

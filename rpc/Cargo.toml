@@ -1,0 +1,57 @@
+[package]
+name = "tva-rpc"
+version = "0.1.0"
+edition = "2021"
+description = "TVA Protocol RPC Translation Server - Ethereum JSON-RPC to Stellar/Soroban"
+license = "MIT"
+
+[dependencies]
+# JSON-RPC server framework
+jsonrpsee = { version = "0.24", features = ["server", "macros"] }
+
+# Async runtime
+tokio = { version = "1", features = ["full"] }
+
+# HTTP client for Soroban RPC
+reqwest = { version = "0.12", features = ["json"] }
+
+# Serialization
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+
+# Hex encoding/decoding
+hex = "0.4"
+
+# Keccak256 hashing (for function selectors)
+sha3 = "0.10"
+
+# RLP encoding/decoding (for EVM transactions)
+rlp = "0.5"
+
+# ABI encoding/decoding
+alloy-primitives = "0.8"
+alloy-sol-types = "0.8"
+
+# Environment configuration
+dotenvy = "0.15"
+
+# Logging
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+
+# Error handling
+thiserror = "2"
+anyhow = "1"
+
+# Base64 (for Stellar XDR)
+base64 = "0.22"
+
+# Numeric types
+num-bigint = "0.4"
+num-traits = "0.2"
+
+# Ethereum types
+ethereum-types = "0.15"
+
+# Chrono for timestamps
+chrono = "0.4"

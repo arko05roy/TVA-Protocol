@@ -13,10 +13,21 @@ pragma solidity 0;
  * - extendTtl() on persistent variables for state archival management
  * - extendInstanceTtl() for contract lifetime extension
  *
- * NOTE: Events are not yet supported on Solang's Soroban target.
- *       Once supported, this contract should emit Incremented/Decremented/Reset events.
+ * Events are emitted for all state-changing operations:
+ * - Incremented: when count goes up
+ * - Decremented: when count goes down
+ * - Reset: when admin resets to zero
+ * - CounterSet: when admin sets a specific value
  */
 contract Counter {
+    /// @notice Emitted when counter is incremented
+    event Incremented(uint64 indexed newCount);
+    /// @notice Emitted when counter is decremented
+    event Decremented(uint64 indexed newCount);
+    /// @notice Emitted when counter is reset by admin
+    event Reset(address indexed admin);
+    /// @notice Emitted when counter is set to a specific value
+    event CounterSet(uint64 indexed newValue, address indexed admin);
     /// Persistent storage - survives across invocations, TTL-managed
     uint64 public persistent count = 0;
 
@@ -33,6 +44,7 @@ contract Counter {
     function increment() public returns (uint64) {
         count += 1;
         count.extendTtl(100, 5000);
+        emit Incremented(count);
         return count;
     }
 
@@ -42,6 +54,7 @@ contract Counter {
     function increment_by(uint64 amount) public returns (uint64) {
         count += amount;
         count.extendTtl(100, 5000);
+        emit Incremented(count);
         return count;
     }
 
@@ -51,6 +64,7 @@ contract Counter {
         require(count > 0, "Counter: cannot decrement below zero");
         count -= 1;
         count.extendTtl(100, 5000);
+        emit Decremented(count);
         return count;
     }
 
@@ -59,6 +73,7 @@ contract Counter {
         admin.requireAuth();
         count = 0;
         count.extendTtl(100, 5000);
+        emit Reset(admin);
     }
 
     /// @notice Set counter to a specific value (admin only)
@@ -67,6 +82,7 @@ contract Counter {
         admin.requireAuth();
         count = value;
         count.extendTtl(100, 5000);
+        emit CounterSet(value, admin);
     }
 
     /// @notice Get current count value (read-only)

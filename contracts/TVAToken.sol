@@ -10,7 +10,7 @@ pragma solidity 0;
  * - Storage types: instance for config (name, symbol, admin), persistent for supply counter
  * - Mappings: used for balances and allowances (Soroban contract data entries)
  * - int128 amounts: matches Soroban's native token interface standard
- * - No events: Soroban event emission not yet supported in Solang
+ * - Events: Transfer, Approval, Mint, Burn emitted for all state changes
  * - TTL: extendInstanceTtl for contract lifetime, extendTtl on uint64 persistent vars
  *
  * NOTE: extendTtl() only works on uint64 persistent/temporary variables in current Solang.
@@ -19,6 +19,19 @@ pragma solidity 0;
  * Compile: solang compile TVAToken.sol --target soroban
  */
 contract TVAToken {
+    /// @notice Emitted on token transfer
+    event Transfer(address indexed from, address indexed to, int128 amount);
+    /// @notice Emitted on approval change
+    event Approval(address indexed owner, address indexed spender, int128 amount);
+    /// @notice Emitted when tokens are minted
+    event Mint(address indexed to, int128 amount);
+    /// @notice Emitted when tokens are burned
+    event Burn(address indexed from, int128 amount);
+    /// @notice Emitted when contract is paused/unpaused
+    event PauseStateChanged(bool indexed newState);
+    /// @notice Emitted when admin is changed
+    event AdminChanged(address indexed newAdmin);
+
     // Instance storage - contract configuration (lives with contract instance)
     string public instance name;
     string public instance symbol;
@@ -71,6 +84,7 @@ contract TVAToken {
 
         balances[from] = fromBal - amount;
         balances[to] = balances[to] + amount;
+        emit Transfer(from, to, amount);
     }
 
     /// @notice Approve a spender to transfer tokens on behalf of owner
@@ -82,6 +96,7 @@ contract TVAToken {
         require(amount >= 0, "TVAToken: negative amount");
         owner.requireAuth();
         allowances[owner][spender] = amount;
+        emit Approval(owner, spender, amount);
     }
 
     /// @notice Transfer tokens using a pre-approved allowance
@@ -104,6 +119,7 @@ contract TVAToken {
         allowances[from][spender] = allowed - amount;
         balances[from] = fromBal - amount;
         balances[to] = balances[to] + amount;
+        emit Transfer(from, to, amount);
     }
 
     // ========== Query Functions ==========
@@ -143,6 +159,7 @@ contract TVAToken {
         balances[to] = balances[to] + amount;
         supplyCounter += 1;
         supplyCounter.extendTtl(100, 10000);
+        emit Mint(to, amount);
     }
 
     /// @notice Burn tokens from a holder's balance
@@ -158,6 +175,7 @@ contract TVAToken {
         require(fromBal >= amount, "TVAToken: insufficient balance");
 
         balances[from] = fromBal - amount;
+        emit Burn(from, amount);
     }
 
     /// @notice Burn tokens from a holder using spender allowance
@@ -177,18 +195,21 @@ contract TVAToken {
 
         balances[from] = fromBal - amount;
         allowances[from][spender] = allowed - amount;
+        emit Burn(from, amount);
     }
 
     /// @notice Pause all transfers and minting (admin only)
     function pause() public {
         admin.requireAuth();
         paused = true;
+        emit PauseStateChanged(true);
     }
 
     /// @notice Unpause transfers and minting (admin only)
     function unpause() public {
         admin.requireAuth();
         paused = false;
+        emit PauseStateChanged(false);
     }
 
     /// @notice Transfer admin role to a new address (admin only)
@@ -196,6 +217,7 @@ contract TVAToken {
     function set_admin(address newAdmin) public {
         admin.requireAuth();
         admin = newAdmin;
+        emit AdminChanged(newAdmin);
     }
 
     // ========== TTL Management ==========
