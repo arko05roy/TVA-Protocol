@@ -3,6 +3,8 @@ use std::sync::Arc;
 
 use anyhow::{anyhow, Result};
 use jsonrpsee::server::{RpcModule, Server};
+use tower::ServiceBuilder;
+use tower_http::cors::{AllowOrigin, Any, CorsLayer};
 use tracing::{info, warn};
 
 use crate::config::Config;
@@ -60,8 +62,17 @@ pub async fn start_server(config: Config) -> Result<()> {
     // Register all RPC methods
     register_methods(&mut module)?;
 
-    // Start the server
+    // CORS middleware - allow all origins for development
+    let cors = CorsLayer::new()
+        .allow_origin(AllowOrigin::any())
+        .allow_methods(Any)
+        .allow_headers(Any);
+
+    let middleware = ServiceBuilder::new().layer(cors);
+
+    // Start the server with CORS
     let server = Server::builder()
+        .set_http_middleware(middleware)
         .build(addr)
         .await
         .map_err(|e| anyhow!("Failed to bind server to {}: {}", addr, e))?;

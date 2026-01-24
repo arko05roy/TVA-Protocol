@@ -1,0 +1,472 @@
+#!/bin/bash
+# =============================================================================
+# TVA CLI - EVM-to-Stellar Development Tool
+# Compile, deploy, and interact with Solidity contracts on Stellar
+# =============================================================================
+set -e
+
+# Resolve project root (where this script lives)
+PROJECT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+# Tool paths
+SOLANG="$PROJECT_ROOT/tooling/bin/solang"
+STELLAR="$PROJECT_ROOT/tooling/bin/stellar"
+SHIM="$PROJECT_ROOT/tooling/msg-sender-shim/target/release/msg-sender-shim"
+ARTIFACTS="$PROJECT_ROOT/artifacts"
+
+# Stellar config
+NETWORK_PASSPHRASE="Test SDF Network ; September 2015"
+RPC_URL="https://soroban-testnet.stellar.org"
+SOURCE_ACCOUNT="${TVA_SOURCE:-tva-deployer}"
+
+# Colors
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+BLUE='\033[0;34m'
+YELLOW='\033[1;33m'
+CYAN='\033[0;36m'
+NC='\033[0m' # No Color
+BOLD='\033[1m'
+
+# ---------- Helpers ----------
+
+print_header() {
+    echo -e "${CYAN}${BOLD}TVA${NC} ${BOLD}$1${NC}"
+}
+
+print_success() {
+    echo -e "  ${GREEN}✓${NC} $1"
+}
+
+print_error() {
+    echo -e "  ${RED}✗${NC} $1" >&2
+}
+
+print_info() {
+    echo -e "  ${BLUE}→${NC} $1"
+}
+
+print_warn() {
+    echo -e "  ${YELLOW}!${NC} $1"
+}
+
+check_solang() {
+    if [ ! -x "$SOLANG" ]; then
+        print_error "Solang compiler not found at $SOLANG"
+        exit 1
+    fi
+}
+
+check_stellar() {
+    if [ ! -x "$STELLAR" ]; then
+        print_error "Stellar CLI not found at $STELLAR"
+        exit 1
+    fi
+}
+
+# ---------- Commands ----------
+
+cmd_compile() {
+    local input="$1"
+    local output_dir="${2:-$ARTIFACTS}"
+
+    if [ -z "$input" ]; then
+        print_error "Usage: tva compile <file.sol|directory> [output_dir]"
+        exit 1
+    fi
+
+    check_solang
+    mkdir -p "$output_dir"
+
+    # Collect .sol files
+    local files=()
+    if [ -d "$input" ]; then
+        while IFS= read -r -d '' f; do
+            files+=("$f")
+        done < <(find "$input" -name "*.sol" -not -path "*/test/*" -not -path "*/.processed/*" -not -path "*/node_modules/*" -print0)
+    elif [ -f "$input" ]; then
+        files=("$input")
+    else
+        print_error "File or directory not found: $input"
+        exit 1
+    fi
+
+    if [ ${#files[@]} -eq 0 ]; then
+        print_error "No .sol files found"
+        exit 1
+    fi
+
+    print_header "Compiling ${#files[@]} contract(s)..."
+    echo ""
+
+    local success=0
+    local failed=0
+
+    for file in "${files[@]}"; do
+        local basename=$(basename "$file" .sol)
+        print_info "Compiling ${BOLD}$basename${NC}.sol"
+
+        # Check if msg.sender preprocessing is needed
+        local compile_file="$file"
+        if grep -q "msg\.sender" "$file" 2>/dev/null; then
+            if [ -x "$SHIM" ]; then
+                local processed_dir="$(dirname "$file")/.processed"
+                mkdir -p "$processed_dir"
+                local processed_file="$processed_dir/$(basename "$file")"
+                "$SHIM" "$file" -o "$processed_file" 2>/dev/null
+                if [ $? -eq 0 ]; then
+                    print_info "  Preprocessed msg.sender patterns"
+                    compile_file="$processed_file"
+                fi
+            else
+                print_warn "  Contains msg.sender but preprocessor not built (run: cd tooling/msg-sender-shim && cargo build --release)"
+            fi
+        fi
+
+        # Compile with Solang
+        if "$SOLANG" compile --target soroban "$compile_file" -o "$output_dir" 2>/tmp/tva-compile-err.txt; then
+            local wasm_file="$output_dir/$basename.wasm"
+            if [ -f "$wasm_file" ]; then
+                local size=$(wc -c < "$wasm_file")
+                print_success "$basename.wasm (${size} bytes)"
+                success=$((success + 1))
+            else
+                print_success "$basename compiled"
+                success=$((success + 1))
+            fi
+        else
+            print_error "$basename failed:"
+            cat /tmp/tva-compile-err.txt | head -10 | sed 's/^/    /'
+            failed=$((failed + 1))
+        fi
+    done
+
+    echo ""
+    if [ $failed -eq 0 ]; then
+        print_success "All ${success} contract(s) compiled → ${output_dir}/"
+    else
+        print_warn "${success} compiled, ${failed} failed"
+        exit 1
+    fi
+}
+
+cmd_deploy() {
+    local input="$1"
+    shift 1 2>/dev/null || true
+    local extra_args=("$@")
+
+    if [ -z "$input" ]; then
+        print_error "Usage: tva deploy <file.wasm|file.sol> [constructor args...]"
+        echo ""
+        print_info "Examples:"
+        print_info "  tva deploy Counter.sol --_admin tva-deployer"
+        print_info "  tva deploy artifacts/TVAToken.wasm --_admin tva-deployer --name \"My Token\" --symbol TKN --decimals 7"
+        exit 1
+    fi
+
+    check_stellar
+
+    # If .sol file passed, compile first
+    local wasm_file="$input"
+    if [[ "$input" == *.sol ]]; then
+        print_header "Compiling before deploy..."
+        cmd_compile "$input" "$ARTIFACTS"
+        echo ""
+        local basename=$(basename "$input" .sol)
+        wasm_file="$ARTIFACTS/$basename.wasm"
+    fi
+
+    if [ ! -f "$wasm_file" ]; then
+        print_error "WASM file not found: $wasm_file"
+        print_info "Run 'tva compile <file.sol>' first"
+        exit 1
+    fi
+
+    local basename=$(basename "$wasm_file" .wasm)
+    print_header "Deploying ${BOLD}$basename${NC} to Stellar testnet..."
+    echo ""
+
+    # Deploy (pass through any extra args as constructor params)
+    local contract_id
+    contract_id=$("$STELLAR" contract deploy \
+        --wasm "$wasm_file" \
+        --source-account "$SOURCE_ACCOUNT" \
+        --network-passphrase "$NETWORK_PASSPHRASE" \
+        --rpc-url "$RPC_URL" \
+        -- "${extra_args[@]}" 2>&1)
+
+    if [ $? -ne 0 ]; then
+        # Check if it's a constructor args error
+        if echo "$contract_id" | grep -q "Missing required argument"; then
+            print_error "Contract requires constructor arguments:"
+            echo "$contract_id" | grep -E "argument|Suggestions" | sed 's/^/    /'
+            echo ""
+            print_info "Usage: tva deploy $input --<arg_name> <value> ..."
+        else
+            print_error "Deployment failed:"
+            echo "$contract_id" | sed 's/^/    /'
+        fi
+        exit 1
+    fi
+
+    # Extract just the contract ID (last line, starts with C)
+    local clean_id=$(echo "$contract_id" | grep -oE 'C[A-Z0-9]{55}' | tail -1)
+    if [ -z "$clean_id" ]; then
+        clean_id=$(echo "$contract_id" | tail -1 | tr -d '[:space:]')
+    fi
+
+    print_success "Deployed!"
+    print_info "Contract ID: ${BOLD}$clean_id${NC}"
+    print_info "Explorer:    https://stellar.expert/explorer/testnet/contract/$clean_id"
+    echo ""
+
+    # Save deployment info
+    local deploy_log="$ARTIFACTS/deployments.log"
+    echo "$(date -Iseconds) | $basename | $clean_id" >> "$deploy_log"
+
+    echo "$clean_id"
+}
+
+cmd_invoke() {
+    local contract_id="$1"
+    local function="$2"
+    shift 2 2>/dev/null || true
+
+    if [ -z "$contract_id" ] || [ -z "$function" ]; then
+        print_error "Usage: tva invoke <contract_id> <function> [args...]"
+        exit 1
+    fi
+
+    check_stellar
+
+    print_header "Invoking ${BOLD}$function${NC}()..."
+
+    # Build args
+    local args=("$@")
+    local stellar_args=()
+    for arg in "${args[@]}"; do
+        stellar_args+=("$arg")
+    done
+
+    local result
+    local exit_code
+    result=$("$STELLAR" contract invoke \
+        --id "$contract_id" \
+        --source-account "$SOURCE_ACCOUNT" \
+        --network-passphrase "$NETWORK_PASSPHRASE" \
+        --rpc-url "$RPC_URL" \
+        -- "$function" "${stellar_args[@]}" 2>&1)
+    exit_code=$?
+
+    if [ $exit_code -ne 0 ]; then
+        print_error "Invocation failed:"
+        echo "$result" | sed 's/^/    /'
+        exit 1
+    fi
+
+    # Extract just the return value (last line, skip info messages)
+    local value=$(echo "$result" | grep -v "^ℹ️\|^📅\|^Simulation\|^Send by" | tail -1)
+    # Show events if present
+    local event=$(echo "$result" | grep "Event:" | sed 's/.*Event: //' | sed 's/ = .*//')
+
+    if [ -n "$event" ] && [ "$event" != "$value" ]; then
+        print_success "Result: ${BOLD}$value${NC}  ${CYAN}event: $event${NC}"
+    else
+        print_success "Result: ${BOLD}$value${NC}"
+    fi
+    echo ""
+}
+
+cmd_build() {
+    # Compile + Deploy in one step
+    local input="$1"
+    shift 1 2>/dev/null || true
+    local extra_args=("$@")
+
+    if [ -z "$input" ]; then
+        print_error "Usage: tva build <file.sol> [constructor args...]"
+        print_info "Example: tva build contracts/Counter.sol --_admin tva-deployer"
+        exit 1
+    fi
+
+    cmd_compile "$input" "$ARTIFACTS"
+    echo ""
+
+    local basename=$(basename "$input" .sol)
+    local wasm="$ARTIFACTS/$basename.wasm"
+
+    if [ -f "$wasm" ]; then
+        cmd_deploy "$wasm" "${extra_args[@]}"
+    fi
+}
+
+cmd_status() {
+    print_header "Status"
+    echo ""
+
+    # Check Solang
+    if [ -x "$SOLANG" ]; then
+        print_success "Solang compiler: ready"
+    else
+        print_error "Solang compiler: not found"
+    fi
+
+    # Check Stellar CLI
+    if [ -x "$STELLAR" ]; then
+        print_success "Stellar CLI: ready"
+    else
+        print_error "Stellar CLI: not found"
+    fi
+
+    # Check msg-sender-shim
+    if [ -x "$SHIM" ]; then
+        print_success "msg.sender preprocessor: ready"
+    else
+        print_warn "msg.sender preprocessor: not built"
+    fi
+
+    # Check RPC server
+    if curl -s http://localhost:8545 -X POST -H "Content-Type: application/json" -d '{"jsonrpc":"2.0","method":"eth_chainId","params":[],"id":1}' >/dev/null 2>&1; then
+        print_success "TVA RPC server: running on :8545"
+    else
+        print_warn "TVA RPC server: not running"
+    fi
+
+    # Check artifacts
+    local wasm_count=$(find "$ARTIFACTS" -name "*.wasm" 2>/dev/null | wc -l)
+    print_info "Compiled contracts: $wasm_count WASM files in artifacts/"
+
+    # Show recent deployments
+    if [ -f "$ARTIFACTS/deployments.log" ]; then
+        echo ""
+        print_info "Recent deployments:"
+        tail -5 "$ARTIFACTS/deployments.log" | while read line; do
+            echo "    $line"
+        done
+    fi
+    echo ""
+}
+
+cmd_rpc() {
+    local action="${1:-start}"
+
+    case "$action" in
+        start)
+            if lsof -ti:8545 >/dev/null 2>&1; then
+                print_warn "RPC server already running on :8545"
+                return
+            fi
+            print_header "Starting RPC server on :8545..."
+            local rpc_bin="$PROJECT_ROOT/rpc/target/release/tva-rpc"
+            if [ ! -x "$rpc_bin" ]; then
+                print_info "Building RPC server..."
+                (cd "$PROJECT_ROOT/rpc" && cargo build --release 2>&1 | tail -3)
+            fi
+
+            local secret_key
+            secret_key=$("$STELLAR" keys show "$SOURCE_ACCOUNT" 2>/dev/null || echo "")
+            if [ -z "$secret_key" ]; then
+                print_error "No source account key found. Run: tva setup"
+                exit 1
+            fi
+
+            STELLAR_RPC_URL="$RPC_URL" \
+            STELLAR_NETWORK_PASSPHRASE="$NETWORK_PASSPHRASE" \
+            STELLAR_SECRET_KEY="$secret_key" \
+            TVA_RPC_PORT=8545 \
+            TVA_CHAIN_ID=1414676736 \
+            RUST_LOG=info \
+            "$rpc_bin" > /tmp/tva-rpc.log 2>&1 &
+
+            sleep 2
+            if curl -s http://localhost:8545 -X POST -H "Content-Type: application/json" -d '{"jsonrpc":"2.0","method":"eth_chainId","params":[],"id":1}' >/dev/null 2>&1; then
+                print_success "RPC server running on http://localhost:8545"
+            else
+                print_error "Failed to start. Check /tmp/tva-rpc.log"
+                exit 1
+            fi
+            ;;
+        stop)
+            lsof -ti:8545 | xargs kill 2>/dev/null && print_success "RPC server stopped" || print_warn "No RPC server running"
+            ;;
+        logs)
+            tail -f /tmp/tva-rpc.log
+            ;;
+        *)
+            print_error "Usage: tva rpc [start|stop|logs]"
+            ;;
+    esac
+}
+
+cmd_setup() {
+    print_header "Setting up TVA development environment..."
+    echo ""
+
+    check_stellar
+
+    # Generate testnet identity
+    if "$STELLAR" keys address tva-deployer >/dev/null 2>&1; then
+        print_success "Identity 'tva-deployer' already exists"
+        local addr=$("$STELLAR" keys address tva-deployer 2>/dev/null)
+        print_info "Address: $addr"
+    else
+        print_info "Generating testnet identity..."
+        "$STELLAR" keys generate tva-deployer --network testnet \
+            --network-passphrase "$NETWORK_PASSPHRASE" \
+            --rpc-url "$RPC_URL" 2>/dev/null
+        print_success "Created identity 'tva-deployer' (funded via friendbot)"
+        local addr=$("$STELLAR" keys address tva-deployer 2>/dev/null)
+        print_info "Address: $addr"
+    fi
+
+    echo ""
+    print_success "Ready! Try: tva compile contracts/Counter.sol"
+}
+
+cmd_help() {
+    echo -e "${CYAN}${BOLD}TVA CLI${NC} - EVM-to-Stellar Development Tool"
+    echo ""
+    echo -e "${BOLD}USAGE${NC}"
+    echo "    tva <command> [options]"
+    echo ""
+    echo -e "${BOLD}COMMANDS${NC}"
+    echo "    compile <file.sol|dir>     Compile Solidity → Soroban WASM"
+    echo "    deploy  <file.sol|.wasm>   Deploy contract to Stellar testnet"
+    echo "    build   <file.sol>         Compile + deploy in one step"
+    echo "    invoke  <id> <fn> [args]   Call a deployed contract function"
+    echo "    rpc     [start|stop|logs]  Manage the TVA RPC server (:8545)"
+    echo "    setup                      Set up testnet identity + fund"
+    echo "    status                     Check tool status and deployments"
+    echo "    help                       Show this help"
+    echo ""
+    echo -e "${BOLD}EXAMPLES${NC}"
+    echo "    tva compile contracts/Counter.sol"
+    echo "    tva build contracts/TVAToken.sol"
+    echo "    tva deploy artifacts/Counter.wasm"
+    echo "    tva invoke CABC...XYZ increment"
+    echo "    tva invoke CABC...XYZ increment_by --amount 5"
+    echo "    tva rpc start"
+    echo ""
+    echo -e "${BOLD}ENVIRONMENT${NC}"
+    echo "    TVA_SOURCE   Source account name (default: tva-deployer)"
+    echo ""
+}
+
+# ---------- Main ----------
+
+case "${1:-help}" in
+    compile|c)   shift; cmd_compile "$@" ;;
+    deploy|d)    shift; cmd_deploy "$@" ;;
+    build|b)     shift; cmd_build "$@" ;;
+    invoke|i)    shift; cmd_invoke "$@" ;;
+    rpc)         shift; cmd_rpc "$@" ;;
+    setup)       shift; cmd_setup "$@" ;;
+    status|s)    shift; cmd_status "$@" ;;
+    help|--help|-h) cmd_help ;;
+    *)
+        print_error "Unknown command: $1"
+        echo ""
+        cmd_help
+        exit 1
+        ;;
+esac

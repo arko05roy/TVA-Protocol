@@ -55,3 +55,8 @@ ethereum-types = "0.15"
 
 # Chrono for timestamps
 chrono = "0.4"
+
+# CORS middleware
+tower = "0.4"
+tower-http = { version = "0.5", features = ["cors"] }
+http = "1"
