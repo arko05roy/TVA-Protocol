@@ -435,8 +435,12 @@ impl MsgSenderTransformer {
         }
 
         // Better approach: do it all in one pass per modifier
+        let multi_space_re = Regex::new(r"  +").unwrap();
         result = source.to_string();
         for (modifier_name, comparand) in modifier_auth_map {
+            let mod_re = Regex::new(
+                &format!(r"\b{}\b", regex::escape(modifier_name))
+            ).unwrap();
             let mut new_result = String::new();
             let mut remaining = result.as_str();
 
@@ -453,15 +457,11 @@ impl MsgSenderTransformer {
                         let sig_portion = &remaining[..brace_pos];
 
                         // Check if this signature contains our modifier
-                        let mod_re = Regex::new(
-                            &format!(r"\b{}\b", regex::escape(modifier_name))
-                        ).unwrap();
-
                         if mod_re.is_match(sig_portion) {
                             // Remove the modifier from signature
                             let cleaned_sig = mod_re.replace_all(sig_portion, "").to_string();
                             // Clean up double spaces
-                            let cleaned_sig = Regex::new(r"  +").unwrap()
+                            let cleaned_sig = multi_space_re
                                 .replace_all(&cleaned_sig, " ").to_string();
 
                             new_result.push_str(&cleaned_sig);
@@ -1073,5 +1073,221 @@ contract Token {
         let result = t.transform(src);
         assert!(result.output.contains("_invoker"));
         assert!(result.output.contains("address _invoker"));
+    }
+
+    #[test]
+    fn test_nested_mapping_access() {
+        let t = default_transformer();
+        let src = r#"pragma solidity ^0.8.0;
+contract Foo {
+    mapping(address => mapping(address => uint256)) allowances;
+    function approve(address spender, uint256 amount) public {
+        allowances[msg.sender][spender] = amount;
+    }
+}
+"#;
+        let result = t.transform(src);
+        assert!(result.output.contains("allowances[_caller][spender]"));
+        assert!(result.output.contains("address _caller"));
+        assert!(!has_msg_sender_in_code(&result.output));
+    }
+
+    #[test]
+    fn test_ownership_and_mapping_combined() {
+        let t = default_transformer();
+        let src = r#"pragma solidity ^0.8.0;
+contract Foo {
+    address owner;
+    mapping(address => uint256) balances;
+    function ownerMint(uint256 amount) public {
+        require(msg.sender == owner, "not owner");
+        balances[msg.sender] += amount;
+    }
+}
+"#;
+        let result = t.transform(src);
+        assert!(result.output.contains("owner.requireAuth()"));
+        assert!(result.output.contains("balances[_caller]"));
+        assert!(result.output.contains("address _caller"));
+        assert!(!has_msg_sender_in_code(&result.output));
+    }
+
+    #[test]
+    fn test_function_with_returns() {
+        let t = default_transformer();
+        let src = r#"pragma solidity ^0.8.0;
+contract Foo {
+    mapping(address => uint256) balances;
+    function getMyBalance() public view returns (uint256) {
+        return balances[msg.sender];
+    }
+}
+"#;
+        let result = t.transform(src);
+        assert!(result.output.contains("address _caller"));
+        assert!(result.output.contains("balances[_caller]"));
+        assert!(result.output.contains("returns (uint256)"));
+        assert!(!has_msg_sender_in_code(&result.output));
+    }
+
+    #[test]
+    fn test_msg_sender_in_event() {
+        let t = default_transformer();
+        let src = r#"pragma solidity ^0.8.0;
+contract Foo {
+    event Action(address actor);
+    function doAction() public {
+        emit Action(msg.sender);
+    }
+}
+"#;
+        let result = t.transform(src);
+        assert!(result.output.contains("emit Action(_caller)"));
+        assert!(result.output.contains("address _caller"));
+        assert!(!has_msg_sender_in_code(&result.output));
+    }
+
+    #[test]
+    fn test_multiple_msg_sender_in_single_line() {
+        let t = default_transformer();
+        let src = r#"pragma solidity ^0.8.0;
+contract Foo {
+    mapping(address => uint256) balances;
+    function selfTransfer() public {
+        balances[msg.sender] = balances[msg.sender] + 1;
+    }
+}
+"#;
+        let result = t.transform(src);
+        assert!(result.output.contains("balances[_caller] = balances[_caller] + 1"));
+        assert!(!has_msg_sender_in_code(&result.output));
+    }
+
+    #[test]
+    fn test_function_with_complex_params() {
+        let t = default_transformer();
+        let src = r#"pragma solidity ^0.8.0;
+contract Foo {
+    mapping(address => uint256) balances;
+    function complexFunc(address a, uint256 b, bool c) public view returns (uint256, bool) {
+        return (balances[msg.sender], c);
+    }
+}
+"#;
+        let result = t.transform(src);
+        assert!(result.output.contains("address _caller, address a, uint256 b, bool c"));
+        assert!(result.output.contains("balances[_caller]"));
+        assert!(!has_msg_sender_in_code(&result.output));
+    }
+
+    #[test]
+    fn test_modifier_auth_injection_in_function() {
+        let t = default_transformer();
+        let src = r#"pragma solidity ^0.8.0;
+contract Foo {
+    address owner;
+    uint256 value;
+    modifier onlyOwner() {
+        require(msg.sender == owner);
+        _;
+    }
+    function setValue(uint256 v) public onlyOwner {
+        value = v;
+    }
+}
+"#;
+        let result = t.transform(src);
+        // setValue should get owner.requireAuth() injected
+        assert!(result.output.contains("owner.requireAuth()"));
+        // The modifier should be removed from the function signature
+        let code_lines: Vec<&str> = result.output.lines()
+            .filter(|l| !l.trim_start().starts_with("//"))
+            .collect();
+        let has_only_owner = code_lines.iter().any(|l| l.contains("onlyOwner"));
+        assert!(!has_only_owner, "onlyOwner should be removed from function signature");
+        assert!(!has_msg_sender_in_code(&result.output));
+    }
+
+    #[test]
+    fn test_multiple_modifiers_different_auth() {
+        let t = default_transformer();
+        let src = r#"pragma solidity ^0.8.0;
+contract Foo {
+    address owner;
+    address admin;
+    modifier onlyOwner() {
+        require(msg.sender == owner);
+        _;
+    }
+    modifier onlyAdmin() {
+        require(msg.sender == admin);
+        _;
+    }
+    function ownerFunc() public onlyOwner {
+        // owner only
+    }
+    function adminFunc() public onlyAdmin {
+        // admin only
+    }
+}
+"#;
+        let result = t.transform(src);
+        assert_eq!(result.modifiers_transformed, 2);
+        // ownerFunc should have owner.requireAuth()
+        assert!(result.output.contains("owner.requireAuth()"));
+        // adminFunc should have admin.requireAuth()
+        assert!(result.output.contains("admin.requireAuth()"));
+        assert!(!has_msg_sender_in_code(&result.output));
+    }
+
+    #[test]
+    fn test_skip_modifiers_flag() {
+        let config = TransformConfig {
+            caller_param_name: "_caller".to_string(),
+            remove_redundant_requires: true,
+            transform_modifiers: false,
+        };
+        let t = MsgSenderTransformer::new(config);
+        let src = r#"pragma solidity ^0.8.0;
+contract Foo {
+    address owner;
+    modifier onlyOwner() {
+        require(msg.sender == owner);
+        _;
+    }
+    function restricted() public onlyOwner {
+        doStuff();
+    }
+}
+"#;
+        let result = t.transform(src);
+        // Modifier should NOT be transformed
+        assert_eq!(result.modifiers_transformed, 0);
+        // The modifier body still contains msg.sender (not transformed)
+        // But we do not add _caller either since the function body doesn't use msg.sender
+        assert!(result.output.contains("modifier onlyOwner"));
+    }
+
+    #[test]
+    fn test_preserve_non_msg_sender_requires() {
+        let t = default_transformer();
+        let src = r#"pragma solidity ^0.8.0;
+contract Foo {
+    address owner;
+    mapping(address => uint256) balances;
+    function withdraw(uint256 amount) public {
+        require(msg.sender == owner, "not owner");
+        require(amount > 0, "zero amount");
+        require(balances[msg.sender] >= amount, "insufficient");
+        balances[msg.sender] -= amount;
+    }
+}
+"#;
+        let result = t.transform(src);
+        // The non-msg.sender require should be preserved
+        assert!(result.output.contains("require(amount > 0"));
+        // The msg.sender == owner require should be removed (replaced by auth)
+        assert!(result.output.contains("owner.requireAuth()"));
+        assert!(!has_msg_sender_in_code(&result.output));
     }
 }

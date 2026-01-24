@@ -207,11 +207,11 @@ fn process_dir_recursive(
 
         if path.is_dir() {
             // Skip .processed directory to avoid recursion
-            if path.file_name().map_or(false, |n| n == ".processed") {
+            if path.file_name().is_some_and(|n| n == ".processed") {
                 continue;
             }
             process_dir_recursive(transformer, &path, out_base, src_base, cli, total_files, total_transformed);
-        } else if path.extension().map_or(false, |ext| ext == "sol") {
+        } else if path.extension().is_some_and(|ext| ext == "sol") {
             *total_files += 1;
 
             let source = match fs::read_to_string(&path) {
