@@ -2,39 +2,43 @@ pragma solidity 0;
 
 /**
  * @title AccountRegistry
- * @notice Maps EVM addresses (20 bytes) to Stellar addresses (32 bytes)
- * @dev Core infrastructure contract for TVA Protocol's address translation layer
+ * @notice Maps EVM-derived accounts to Stellar accounts for the TVA Protocol
+ *         address translation layer. Enables the RPC layer to resolve
+ *         Ethereum-originated addresses to corresponding Stellar accounts.
  *
- * This contract enables the RPC layer to resolve Ethereum-style addresses
- * to their corresponding Stellar accounts and vice versa.
+ * @dev Design decisions for Solang/Soroban compatibility:
+ * - Uses 'address' type for all account references (Soroban-native addressing)
+ * - EVM addresses are represented by their mapped Soroban address in the registry
+ * - The RPC layer maintains the off-chain mapping from raw 20-byte EVM addresses
+ *   to their corresponding Soroban address identifiers
+ * - requireAuth() for ownership verification (replaces msg.sender)
+ * - No events (not yet supported on Solang Soroban target)
+ * - Only uint64 persistent variables support extendTtl()
+ *
+ * Registration flow:
+ * 1. User generates a Stellar keypair
+ * 2. RPC layer maps their EVM address to a Soroban address identifier
+ * 3. User calls register() with both addresses, proving Stellar ownership
+ * 4. Bidirectional lookup is stored on-chain
  *
  * Compile: solang compile AccountRegistry.sol --target soroban
  */
 contract AccountRegistry {
     // Instance storage - contract configuration
     address public instance registryAdmin;
-    uint64 public instance registrationCount;
 
-    // Persistent storage - address mappings
-    // EVM address (as bytes20) -> Stellar address (as bytes32)
-    mapping(bytes20 => bytes32) public persistent evmToStellar;
-    // Stellar address (as bytes32) -> EVM address (as bytes20)
-    mapping(bytes32 => bytes20) public persistent stellarToEvm;
-    // Track registration status
-    mapping(bytes20 => bool) public persistent isRegistered;
+    // Persistent storage - registration counter (supports extendTtl)
+    uint64 public persistent registrationCount = 0;
 
-    // Events
-    event AccountRegistered(
-        bytes20 indexed evmAddress,
-        bytes32 indexed stellarAddress
-    );
-    event AccountUpdated(
-        bytes20 indexed evmAddress,
-        bytes32 indexed oldStellarAddress,
-        bytes32 indexed newStellarAddress
-    );
+    // Mappings for bidirectional address lookup (default to persistent)
+    // evmAccount: the Soroban address derived from the EVM address
+    // stellarAccount: the native Stellar/Soroban address
+    mapping(address => address) public evmToStellar;
+    mapping(address => address) public stellarToEvm;
+    mapping(address => bool) public isRegistered;
 
     /// @notice Constructor (becomes init() on Soroban)
+    /// @param _admin The admin address for the registry
     constructor(address _admin) {
         registryAdmin = _admin;
         registrationCount = 0;
@@ -42,88 +46,111 @@ contract AccountRegistry {
 
     /// @notice Register a new EVM-to-Stellar address mapping
     /// @dev The Stellar account holder must authorize this registration
-    /// @param evmAddr The 20-byte Ethereum address
-    /// @param stellarAddr The 32-byte Stellar Ed25519 public key
-    function register(bytes20 evmAddr, bytes32 stellarAddr) public {
+    ///      via requireAuth, proving ownership of the Stellar address.
+    ///      The evmAccount is the Soroban address representation of the EVM address.
+    /// @param evmAccount The Soroban address derived from the EVM address
+    /// @param stellarAccount The native Stellar/Soroban account address
+    function register(address evmAccount, address stellarAccount) public {
         // The Stellar account must prove ownership
-        address stellarAccount = address(stellarAddr);
         stellarAccount.requireAuth();
 
-        // Ensure the EVM address is not already registered
-        require(!isRegistered[evmAddr], "AccountRegistry: already registered");
-
-        // Ensure neither address is zero
-        require(evmAddr != bytes20(0), "AccountRegistry: zero EVM address");
-        require(stellarAddr != bytes32(0), "AccountRegistry: zero Stellar address");
+        // Ensure the EVM account is not already registered
+        require(!isRegistered[evmAccount], "AccountRegistry: already registered");
 
         // Store the mapping (both directions)
-        evmToStellar[evmAddr] = stellarAddr;
-        stellarToEvm[stellarAddr] = evmAddr;
-        isRegistered[evmAddr] = true;
+        evmToStellar[evmAccount] = stellarAccount;
+        stellarToEvm[stellarAccount] = evmAccount;
+        isRegistered[evmAccount] = true;
 
-        // Increment registration count
+        // Increment registration count and extend its TTL
         registrationCount += 1;
-
-        // Extend TTL for all written storage
-        evmToStellar[evmAddr].extendTtl(1000, 100000);
-        stellarToEvm[stellarAddr].extendTtl(1000, 100000);
-        isRegistered[evmAddr].extendTtl(1000, 100000);
-
-        emit AccountRegistered(evmAddr, stellarAddr);
+        registrationCount.extendTtl(1000, 100000);
     }
 
     /// @notice Update an existing registration (admin only)
-    /// @dev Used for key rotation scenarios
-    /// @param evmAddr The 20-byte Ethereum address
-    /// @param newStellarAddr The new 32-byte Stellar address
-    function updateRegistration(bytes20 evmAddr, bytes32 newStellarAddr) public {
+    /// @dev Used for key rotation scenarios. Only the registry admin can do this.
+    /// @param evmAccount The Soroban address derived from the EVM address
+    /// @param newStellarAccount The new Stellar/Soroban account address
+    function update_registration(address evmAccount, address newStellarAccount) public {
         registryAdmin.requireAuth();
 
-        require(isRegistered[evmAddr], "AccountRegistry: not registered");
-        require(newStellarAddr != bytes32(0), "AccountRegistry: zero address");
+        require(isRegistered[evmAccount], "AccountRegistry: not registered");
 
-        bytes32 oldStellarAddr = evmToStellar[evmAddr];
+        address oldStellarAccount = evmToStellar[evmAccount];
 
         // Clear old reverse mapping
-        stellarToEvm[oldStellarAddr] = bytes20(0);
+        stellarToEvm[oldStellarAccount] = address(0);
 
         // Set new mapping
-        evmToStellar[evmAddr] = newStellarAddr;
-        stellarToEvm[newStellarAddr] = evmAddr;
+        evmToStellar[evmAccount] = newStellarAccount;
+        stellarToEvm[newStellarAccount] = evmAccount;
+    }
 
-        // Extend TTL
-        evmToStellar[evmAddr].extendTtl(1000, 100000);
-        stellarToEvm[newStellarAddr].extendTtl(1000, 100000);
+    /// @notice Remove a registration (admin only)
+    /// @dev Clears both directions of the mapping
+    /// @param evmAccount The Soroban address derived from the EVM address
+    function deregister(address evmAccount) public {
+        registryAdmin.requireAuth();
 
-        emit AccountUpdated(evmAddr, oldStellarAddr, newStellarAddr);
+        require(isRegistered[evmAccount], "AccountRegistry: not registered");
+
+        address stellarAccount = evmToStellar[evmAccount];
+
+        // Clear both mappings
+        evmToStellar[evmAccount] = address(0);
+        stellarToEvm[stellarAccount] = address(0);
+        isRegistered[evmAccount] = false;
     }
 
     // ========== Query Functions ==========
 
-    /// @notice Look up Stellar address for a given EVM address
-    function getStellarAddress(bytes20 evmAddr) public view returns (bytes32) {
-        return evmToStellar[evmAddr];
+    /// @notice Look up Stellar address for a given EVM-derived account
+    /// @param evmAccount The Soroban address derived from the EVM address
+    /// @return The corresponding Stellar account address
+    function get_stellar_address(address evmAccount) public view returns (address) {
+        return evmToStellar[evmAccount];
     }
 
-    /// @notice Look up EVM address for a given Stellar address
-    function getEvmAddress(bytes32 stellarAddr) public view returns (bytes20) {
-        return stellarToEvm[stellarAddr];
+    /// @notice Look up EVM-derived account for a given Stellar address
+    /// @param stellarAccount The Stellar/Soroban account address
+    /// @return The corresponding EVM-derived account address
+    function get_evm_address(address stellarAccount) public view returns (address) {
+        return stellarToEvm[stellarAccount];
     }
 
-    /// @notice Check if an EVM address is registered
-    function isAccountRegistered(bytes20 evmAddr) public view returns (bool) {
-        return isRegistered[evmAddr];
+    /// @notice Check if an EVM-derived account is registered
+    /// @param evmAccount The address to check
+    /// @return True if the address is registered
+    function is_account_registered(address evmAccount) public view returns (bool) {
+        return isRegistered[evmAccount];
     }
 
     /// @notice Get total registration count
-    function getRegistrationCount() public view returns (uint64) {
+    /// @return The number of registered accounts
+    function get_registration_count() public view returns (uint64) {
         return registrationCount;
+    }
+
+    // ========== Admin Functions ==========
+
+    /// @notice Transfer admin role to a new address (admin only)
+    /// @param newAdmin The new admin address
+    function set_admin(address newAdmin) public {
+        registryAdmin.requireAuth();
+        registryAdmin = newAdmin;
     }
 
     // ========== TTL Management ==========
 
+    /// @notice Extend TTL for the persistent registration count
+    /// @return The new TTL value
+    function extend_count_ttl() public returns (int64) {
+        return registrationCount.extendTtl(2000, 100000);
+    }
+
     /// @notice Extend contract instance TTL
-    function extendContractTtl() public returns (int64) {
+    /// @return The new TTL value
+    function extend_instance_ttl() public returns (int64) {
         return extendInstanceTtl(2000, 100000);
     }
 }
